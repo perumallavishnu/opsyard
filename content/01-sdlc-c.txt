@@ -1,0 +1,417 @@
+% sdlc | Software Lifecycles | #c8432b | -
+
+## Models and project scale
+# project-scale | What project scale means | Beginner | Small, medium and large, and why the size changes the method.
+@ s user 0 0 Small project
+@ m team 1 0 Medium project
+@ l team 2 0 Large project
+@ r gauge 1 1 Risk
+= Small | SCALE
++ s
+" s Two of us, six weeks.
+1 to 5 people, weeks to about 3 months, one component. A shop website, an internal form, a student project. Talking is enough to stay aligned.
+= Medium | SCALE
++ m
+" m Three teams' work must fit together.
+About 5 to 20 people, 3 to 12 months, several components. A hospital booking system, a mobile banking app. You need written stories, reviews and planned releases.
+= Large | SCALE
++ l
+" l Forty suppliers, five years.
+More than 20 people, a year or more, many teams and suppliers. An airline reservation system, a national tax platform. You need architecture, formal interfaces and coordination between teams.
+= Size is not everything
++ r
+~ s>r ;; m>r ;; l>r
+A pacemaker program may be small, but a mistake can kill. **Risk**, **how stable the requirements are** and **how much the client is available** matter as much as size.
+These numbers are rules of thumb. Companies draw the lines differently.
+= Four questions before choosing
+| Question | Points to |
+| Are requirements fixed? | Waterfall, V-Model |
+| Is failure dangerous? | V-Model, Spiral |
+| Will needs change? | Scrum, Iterative |
+| Does work arrive as requests? | Kanban |
+? A 6-person pacemaker project should be chosen by... | size only | *risk as well as size | popularity
+
+# waterfall | Waterfall model | Beginner | One pass through every phase, each signed off before the next.
+@ c user 0 0 Client
+@ ba user 1 0 Business analyst
+@ d user 2 0 Designer
+@ dev team 3 0 Dev team
+@ qa user 4 0 Tester
+= How it flows
++ c ba d
+" c Here is everything I want.
+w c>ba all needs
+w ba>d signed document
+Requirements, design, build, test, deploy, maintain. Each phase finishes, is documented and approved, then hands over to the next person.
+= The long middle
++ dev qa
+w d>dev spec
+" dev Coding, months 4 to 9.
+w dev>qa whole system
+All the code exists before testing starts. The client sees nothing until the end.
+= Where it breaks | PROBLEM
+w qa>c month 12
+" c This is not what I meant.
+: c err first look
+w !c>ba start again
+A misunderstanding from month 1 is found in month 12. Going back means repeating every phase.
+!! The cost of a mistake grows with the distance between making it and noticing it.
+= Scale and fit | SCALE
+: ba ok stable scope
+| Point | Waterfall |
+| Size | Small to medium, or one fixed part of a large programme |
+| Requirements | Known and stable |
+| Client | Mostly at start and end |
+| Change | Expensive |
+| Documents | Heavy |
+= Real-time example | PRACTICE
+" ba The tax rules are printed law.
+w ba>d rules
+w d>dev spec
+w dev>qa build
+A payroll module for a company of 300 staff. Six people, four months. The tax rules are published, the pay slip layout is fixed, the auditor wants signed documents. Nothing will change before April, so Waterfall is a calm choice.
+= Good and bad
+| Good | Bad |
+| Simple to explain | Late feedback |
+| Clear dates and documents | Testing squeezed at the end |
+| Easy to audit | Poor with changing needs |
+Winston Royce's 1970 paper, often cited as its origin, itself advised iterating.
+? Best match for Waterfall? | A new social app | *Payroll with fixed tax rules | A research prototype
+^ https://www.geeksforgeeks.org/software-engineering/waterfall-model/ GeeksforGeeks: Waterfall
+
+# v-model | V-Model | Beginner | Every design level has its own test level.
+@ r doc 0 0 Requirements
+@ a board 1 0 Architecture
+@ m card 2 0 Module design
+@ c laptop 3 1 Code
+@ ut shield 2 2 Unit tests
+@ it shield 1 2 Integration tests
+@ at shield 0 2 Acceptance tests
+= Down the left side
++ r a m c
+~ r>a ;; a>m ;; m>c
+It keeps Waterfall's order but asks at each level: **how will we test this?**
+= Up the right side
++ ut it at
+~ c>ut ;; ut>it ;; it>at
+Testing climbs back up: unit, integration, acceptance.
+= The pairs
+~ r>at verifies ;; a>it verifies ;; m>ut verifies
+Tests are planned on the way **down**, so vague requirements are noticed early.
+! Verification: did we build it right? Validation: did we build the right thing?
+= Scale and fit | SCALE
+| Point | V-Model |
+| Size | Medium to large |
+| Requirements | Clear, must be traceable |
+| Risk | Safety or money critical |
+| Testing | Planned from day one |
+| Change | Expensive |
+= Real-time example | PRACTICE
+: r ok numbered
+: at ok traced
+~ r>at each one has a test
+The brake control unit of a car. Twenty-five engineers, two years. Every requirement has a number, every number has a test, and an inspector can follow the line from one to the other. Automotive and medical standards expect this kind of traceability.
+= Limits
+Working software still appears late, and a change touches both sides of the V. Teams often run small V's inside each iteration.
+? Acceptance tests verify... | module design | architecture | *requirements
+
+# iterative | Iterative model | Beginner | Build a rough whole, then improve it round by round.
+@ c user 0 0 Client
+@ d team 1 0 Dev team
+@ v1 small 2 0 Version 1
+@ v2 cube 3 0 Version 2
+@ v3 box 4 0 Version 3
+= Rough first
++ c d v1
+" d Here is a simple whole.
+w d>v1 build
+~ v1>c try
+Start with a basic version of the **whole** product: plain screens, few rules, but it works from end to end.
+= Learn and refine
++ v2
+" c Search must find misspelled names.
+w c>d feedback
+w d>v2 improve
+Each round plans, designs, builds and tests a better version.
+= Closer each time
++ v3
+w d>v3 improve
+: v3 ok good enough
+You stop when it is good enough, or when the next improvement is not worth its cost.
+= Scale and fit | SCALE
+| Point | Iterative |
+| Size | Medium to large |
+| Requirements | Main goal known, details open |
+| Client | Looks at each version |
+| Change | Normal |
+| Risk | Design must allow rework |
+= Real-time example | PRACTICE
+" c Version 1 found half of them.
+A search engine for a library of five million books. Twelve people, ten months. Version 1 matches exact titles, version 2 ranks results, version 3 handles spelling and several languages. Nobody could have specified good ranking in advance.
+? Iterative builds first... | one finished part | *a rough whole | only documents
+
+# incremental | Incremental model | Beginner | Deliver finished slices one after another.
+@ c user 0 0 Client
+@ d team 1 0 Dev team
+@ a box 2 0 Login and catalogue
+@ b box 3 0 Cart and payment
+@ e box 4 0 Returns
+= Slice by value
++ c d a
+w d>a increment 1
+~ a>c in use
+Each increment is a complete, usable part. Users start before the whole product exists.
+= Add the next slice
++ b
+w d>b increment 2
+Later increments are added to what already runs. The most valuable ones come first.
+= Compare with iterative
++ e
+w d>e increment 3
+**Incremental**: paint one finished corner of the picture at a time. **Iterative**: sketch the whole picture, then add detail. Agile does both.
+= Scale and fit | SCALE
+| Point | Incremental |
+| Size | Small to large |
+| Requirements | Core known, extras later |
+| Client | Uses early parts |
+| Money | Returns start early |
+| Needs | Good architecture from the start |
+= Real-time example | PRACTICE
+" c We sold shoes in month 3.
+An online shop for a shoe company. Eight people. Month 3: browse and order by phone. Month 5: card payment. Month 7: returns. The first increment earns money that helps pay for the next.
+? Main benefit of increments? | No design needed | *Users get value early | No testing
+
+# prototype | Prototype model | Beginner | Show something quickly to learn what is wanted.
+@ c user 0 0 Client
+@ d user 1 0 Designer
+@ p card 2 0 Prototype
+@ r doc 2 1 Requirements
+@ dev team 1 1 Dev team
+= I will know it when I see it | PROBLEM
++ c d
+" c Make it friendly and modern.
+" d What does that mean?
+Some needs cannot be put into words.
+= Show, do not ask | SOLUTION
++ p
+w d>p sketch
+~ p>c click
+" c No, bigger buttons, fewer steps.
+w d>p change
+A quick model of the screens. Throw it away or change it until the client nods.
+= Then build properly
++ r dev
+~ p>r agreed ;; r>dev build
+: r ok understood
+**Throwaway** prototypes are only for learning. **Evolutionary** ones are improved until they become the product.
+= Scale and fit | SCALE
+| Point | Prototype |
+| Size | Small to medium, or the screens of a large one |
+| Requirements | Unclear, mostly about usage |
+| Client | Must be available |
+| Danger | Client believes it is finished |
+= Real-time example | PRACTICE
+" c Nurses wear gloves: no tiny icons.
+A tablet app for nurses. Five people, three months. Paper sketches on Monday, a clickable Figma model on Thursday, tested on a real ward. The glove problem appeared on day four, not in month three.
+!! Do not ship a throwaway prototype. It has no error handling, security or tests.
+? A throwaway prototype is for... | production | *learning | performance
+
+# spiral | Spiral model | Intermediate | Each round attacks the biggest risk.
+@ g flag 0 0 Goals
+@ r gauge 1 0 Risk analysis
+@ b team 1 1 Build and test
+@ p user 0 1 Plan and review
+@ out box 2 0 Product
+= One turn
++ g r b p
+~ g>r ;; r>b ;; b>p ;; p>g
+Four steps per round: set goals, find and reduce risk, build and test, review and plan the next round.
+= Risk decides
+* r
+" p Can it handle a million calls?
+The team asks: what could kill this project? Then it spends this round on exactly that, often with a prototype.
+= Growing turns
++ out
+~ b>out
+Early rounds are cheap: ideas and models. Later rounds cost more, when the big risks are gone.
+= Scale and fit | SCALE
+| Point | Spiral |
+| Size | Large |
+| Risk | High: new technology, big money |
+| Requirements | Will change |
+| Needs | People skilled in risk analysis |
+| Small project | Too expensive |
+= Real-time example | PRACTICE
+" b Round 2: radar data at full speed.
+A new air traffic control system. Two hundred people, six years. Round 1 proves the radar link, round 2 proves speed, round 3 runs beside the old system at one airport. Only then does the country switch.
+? Spiral is driven by... | documents | *risk | speed
+
+# rad | RAD model | Beginner | Rapid Application Development with users in the room.
+@ u team 0 0 Users
+@ t1 user 1 0 Developer A
+@ t2 user 1 1 Developer B
+@ tool gear 2 0 Low-code tool
+@ app box 3 0 App
+= The idea
++ u t1 t2
+" u This field comes first.
+w u>t1 workshop
+w u>t2 workshop
+Short workshops with users, parallel small teams, strong tools, and fixed time boxes of about 60 to 90 days.
+= Build in parallel
++ tool
+~ t1>tool ;; t2>tool
+Parts are built at the same time from ready components.
+= Join
++ app
+~ tool>app combine
+: app ok 70 days
+Then the parts are joined and tested.
+= Scale and fit | SCALE
+| Point | RAD |
+| Size | Small to medium; larger only if it splits into modules |
+| Time | Very short |
+| Users | Available almost daily |
+| Technology | Known, with good tools |
+| Poor for | High performance or risky technology |
+= Real-time example | PRACTICE
+" u We approved screens every Friday.
+A leave approval app for a company of 2,000. Four developers with a low-code platform, two months. Staff from HR sat in every workshop.
+? RAD needs... | a distant client | *users available often | six years
+
+# bigbang | Big Bang model | Beginner | Almost no plan. When that is acceptable.
+@ d user 0 0 Developer
+@ i card 1 0 Idea
+@ x box 2 0 Result
+= Just start
+w d>i idea
+~ i>x code
+" d Let us see what happens.
+Time and money go in, software comes out. No formal phases, little planning.
+= Why it is risky | RISK
+: x err unknown
+~ !i>x
+You cannot estimate cost or date, and you may learn at the end that it is not useful.
+= Scale and fit | SCALE
+: x ok learned a lot
+| Point | Big Bang |
+| Size | Tiny: one or two people |
+| Purpose | Learning, experiment, demo |
+| Requirements | None yet |
+| Never for | Anything people depend on |
+= Real-time example | PRACTICE
+" d A weekend hackathon app.
+Two students build a game in a weekend hackathon. If it works, great; if not, they lost two days. The moment someone wants to **use** it, choose a real model.
+? Big Bang suits... | a bank | *a weekend experiment | a hospital
+
+# xp-lean | XP, Lean and SAFe | Intermediate | Engineering habits, waste removal, and scaling to many teams.
+@ p1 user 0 0 Developer A
+@ p2 user 0 1 Developer B
+@ tdd shield 1 0 TDD
+@ ci gear 2 0 Continuous integration
+@ t1 team 3 0 Team A
+@ t2 team 3 1 Team B
+@ art flag 4 0 Release train
+= Extreme Programming
++ p1 p2 tdd ci
+" p1 I type.
+" p2 I check each line.
+~ p1>tdd ;; tdd>ci
+XP turns good engineering habits up: **pair programming**, **test-driven development**, **refactoring**, **continuous integration**, small releases.
+= TDD: red, green, refactor
+* tdd
+: tdd err red
+Write a failing test. Write the least code that passes. Clean up while tests protect you. Repeat every few minutes.
+= Lean
+* ci
+Lean comes from Toyota. Remove **waste**: waiting, handoffs, unfinished work, defects, extra features. A **value stream map** records working and waiting time for each step. Waiting usually dominates.
+= SAFe
++ t1 t2 art
+" t1 We need your API by week 6.
+" t2 Then we plan it together.
+~ t1>art ;; t2>art
+With ten teams on one product, plans must align. **SAFe** groups teams into an Agile Release Train that plans together for about 8 to 12 weeks. **LeSS** and **Nexus** are lighter ways to scale Scrum.
+= Scale and fit | SCALE
+| Method | Scale | Real-time example |
+| XP | 2 to 12 people | Trading system with daily releases |
+| Lean | Any | Cutting a 10-day approval to 1 day |
+| LeSS, Nexus | 3 to 8 teams | One large web product |
+| SAFe | 50 to 125 people per train, several trains | Bank with many linked products |
+= Others you will meet
+**Crystal** fits the process to team size. **FDD** plans by feature. **DSDM** fixes time and cost and flexes scope using MoSCoW: Must, Should, Could, Won't (this time).
+? In TDD, what is written first? | The code | *A failing test | Documentation
+
+# agile-scale | Agile models and their scale | Beginner | Scrum, Kanban and DevOps by project size.
+@ s team 0 0 Scrum team
+@ k board 1 0 Kanban board
+@ d gear 2 0 DevOps pipeline
+@ u team 2 1 Users
+= Scrum | SCALE
++ s
+" s Two-week goals, demo on Friday.
+One team of up to 10, changing needs, months to years. **Example:** a food delivery app; six developers release a new feature every Sprint and watch what customers order.
+= Kanban | SCALE
++ k
+~ s>k requests
+Any size, work that arrives unplanned. **Example:** the IT help desk of a university with 60 tickets a day. A Sprint plan would be wrong by noon.
+= Scrumban | SCALE
+* s k
+A product team that also does support. **Example:** a payroll product: Sprint goal for new work, two people on the support lane with a WIP limit.
+= DevOps | SCALE
++ d u
+~ k>d ;; d>u several times a day
+Underneath any of them, from 3 people to thousands. **Example:** a streaming service with hundreds of services; each small team builds, releases and runs its own.
+= Mixed in one company
+| Part of a bank | Model |
+| Core accounting change | V-Model |
+| Mobile app | Scrum |
+| Operations desk | Kanban |
+| All releases | DevOps pipeline |
+One company rarely uses one model everywhere.
+? A help desk with 60 tickets a day fits... | Waterfall | *Kanban | Spiral
+
+# choose-model | Comparing and choosing | Intermediate | All models in one view, and a way to decide.
+@ q user 0 0 Project manager
+@ w doc 1 -1 Waterfall / V
+@ sp gauge 2 -1 Spiral
+@ s board 1 0 Scrum
+@ k queue 1 1 Kanban
+= All in one view
++ q
+" q Which method should we use?
+| Model | Scale | Needs stable? | Feedback |
+| Waterfall | Small-medium | Yes | End |
+| V-Model | Medium-large | Yes | End, tests early |
+| Iterative | Medium-large | Partly | Each version |
+| Incremental | Small-large | Core | Each slice |
+| Prototype | Small-medium | No | Very early |
+| Spiral | Large, risky | No | Each round |
+| RAD | Small-medium | Partly | Weekly |
+| Big Bang | Tiny | No | End |
+| Scrum | One team, scalable | No | Each Sprint |
+| Kanban | Any | No | Continuous |
+= Fixed and regulated
++ w
+~ q>w fixed
+Stable scope and formal sign-off: Waterfall or V-Model.
+= Big and risky
++ sp
+~ q>sp risky
+New technology, big money, long time: Spiral, or iterative with risk reviews.
+= Uncertain product
++ s
+~ q>s learning
+Changing needs and a reachable client: Scrum.
+= Continuous requests
++ k
+~ q>k stream
+Support, platform, operations: Kanban.
+= Try it yourself | PRACTICE
+| Project | A sensible choice |
+| Museum website, 3 people, 6 weeks | Incremental or Kanban |
+| Insulin pump software | V-Model |
+| New dating app | Scrum with prototypes |
+| Government census system | Incremental with Spiral risk reviews |
+| Internal leave form | RAD |
+? Insulin pump software fits... | Big Bang | RAD | *V-Model
+^ https://www.geeksforgeeks.org/software-engineering/top-8-software-development-models-used-in-industry/ GeeksforGeeks: SDLC models

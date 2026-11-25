@@ -1,0 +1,168 @@
+% github | GitHub | #5b4b8a | Pull requests, reviews, protection rules, Actions workflows and repository security.
+
+## Collaboration
+# gh-pr | Pull requests and review | Beginner | Proposing a change and agreeing on it.
+@ d laptop 0 0 Author
+@ b flag 1 0 Branch
+@ pr board 2 0 Pull request
+@ rv user 2 1 Reviewer
+@ ci gear 3 1 Checks
+@ m db 3 0 main
+= Push a branch
+Work on a branch, then publish it. `-u` remembers which remote branch it belongs to, so later a plain `git push` is enough.
++ d b
+~ d>b push
+$ git switch -c add-search
+$ git push -u origin add-search
+= Open a pull request
++ pr
+~ b>pr propose
+$ gh pr create --fill
+A pull request shows the difference and starts a conversation. Write **why**, not only what. `Closes #42` links an issue and closes it on merge.
+= Automatic checks
++ ci
+~ pr>ci run ;; ci>pr green
+: ci ok passed
+Tests and linters run on the proposed change and report back.
+= Human review
+" rv Please add a test.
++ rv
+~ rv>pr comments ;; d>b fix
+Reviewers comment, approve or request changes. Keep pull requests small; large ones get shallow reviews.
+= Merge
++ m
+~ pr>m squash
+**Merge commit** keeps every commit. **Squash** makes one commit. **Rebase** replays them without a merge commit. Delete the branch after.
+? What does squash merge produce? | A merge commit with all commits | *One commit on main | No commit
+^ https://docs.github.com/en/pull-requests GitHub Docs: pull requests
+
+# gh-protect | Forks, rulesets and code owners | Intermediate | Guarding the main branch.
+@ f db 0 0 Fork
+@ u db 2 0 Upstream
+@ g gate 1 0 Ruleset
+@ o user 1 1 Code owner
+@ c gear 2 1 Required check
+= Forks
++ f u
+~ u>f fork ;; f>u pull request
+Without write access, you fork: your own copy on the server. You propose changes back by pull request.
+= Anyone can push? | PROBLEM
+~ !f>u direct push
+: u err broken main
+Without rules, one mistaken push can break main or rewrite history.
+= Rulesets | SOLUTION
++ g c
+* g
+~ c>g must pass
+Require pull requests, approvals and passing checks; block force pushes and deletion. Rulesets can cover many branches and tags.
+= CODEOWNERS
++ o
+~ o>g approves
+A `CODEOWNERS` file maps paths to people who must review them, for example `/infra/ @acme/platform`.
+= Merge queue
+* u
+~ g>u one at a time
+Two pull requests can each pass and still break together. A merge queue tests them in the order they will land.
+? Who must review files listed in CODEOWNERS? | Anyone | *The owners of that path | The author
+
+## Actions
+# gh-actions | GitHub Actions | Beginner | Workflows, jobs, steps and runners.
+@ e flag 0 0 Event
+@ w doc 1 0 Workflow
+@ j1 gear 2 0 Job: test
+@ j2 gear 3 0 Job: build
+@ r server 2 1 Runner
+@ art box 3 1 Artifact
+= An event starts it
++ e w
+~ e>w push
+A workflow is YAML in `.github/workflows/`. Events such as `push`, `pull_request`, `schedule` and `workflow_dispatch` start it.
+= Jobs and runners
++ j1 r
+~ w>j1 ;; j1>r runs on
+Each job gets a fresh runner machine. Steps inside a job run in order and share its files.
+= The file
+* w
+> on: [push]
+> permissions:
+>   contents: read
+> jobs:
+>   test:
+>     runs-on: ubuntu-latest
+>     steps:
+>       - uses: actions/checkout@<full-commit-sha>
+>       - run: npm ci
+>       - run: npm test
+`uses` runs a published action. `run` runs shell commands.
+= Order and matrix
++ j2
+~ j1>j2 needs
+`needs: test` makes build wait. A **matrix** repeats a job across versions, for example Node 22 and 24.
+= Pass files along
++ art
+~ j2>art upload
+Jobs do not share disks. **Artifacts** pass build results. **Cache** speeds up dependencies; treat it as optional.
+= Environments
+: j2 warn waiting for approval
+An environment such as `production` can require approval and hold its own secrets.
+? How do two jobs share a build result? | Same disk | *Artifacts | Environment variables
+^ https://docs.github.com/en/actions GitHub Docs: Actions
+
+# gh-actions-sec | Securing Actions | Advanced | Tokens, pinning, OIDC and untrusted code.
+@ f user 0 0 Fork author
+@ w gear 1 0 Workflow
+@ t key 1 1 GITHUB_TOKEN
+@ a box 2 0 Third-party action
+@ c cloud 2 1 Cloud
+= Least privilege
++ w t
+* t
+: t ok read only
+Set `permissions: contents: read` for the workflow and raise it per job. Listing any permission sets the rest to none.
+= Pin actions
++ a
+~ a>w code
+: a warn tag can move
+A tag like `@v4` can be moved to other code. GitHub recommends a full-length commit SHA; a lockfile that records exact commits, including nested ones, is stronger where you adopt it.
+= Cloud without keys
++ c
+~ w>c OIDC token ;; c>w short-lived access
+With **OIDC** the job proves which repository and branch it is, and the cloud returns temporary credentials. No stored cloud key to leak.
+= Untrusted code | RISK
++ f
+~ !f>w pull_request_target
+: w err has secrets
+`pull_request_target` runs in the base repository's context. Checking out and **running** a fork's code there hands it your token and secrets.
+!! Use plain `pull_request` for building and testing fork code.
+= Script injection
+~ !f>w title text
+Pasting `${{ github.event.pull_request.title }}` into `run:` lets a title become shell code. Put it in `env:` and use `"$TITLE"`.
+? Strongest common way to reference an action by version? | @main | @v4 | *A full commit SHA
+^ https://docs.github.com/en/actions/reference/security/secure-use Secure use reference
+
+# gh-sec | Repository security and more | Intermediate | Dependabot, scanning, issues, releases, Pages.
+@ r db 1 0 Repository
+@ d shield 0 0 Dependabot
+@ s shield 2 0 Secret scanning
+@ c shield 1 1 CodeQL
+@ p cloud 2 1 Pages and Packages
+= Dependencies
++ r d
+~ d>r update PR
+Dependabot raises alerts for known vulnerabilities and opens update pull requests.
+= Secrets
++ s
+~ !r>s token found
+Secret scanning looks for known token formats. **Push protection** stops them before they land.
+= Code
++ c
+~ c>r alert
+CodeQL treats code as data and searches for patterns such as injection.
+= Plan on GitHub
+* r
+Issues, labels, milestones and **Projects** boards track work. Discussions hold questions. `SECURITY.md` tells people how to report privately.
+= Publish
++ p
+~ r>p release
+**Releases** attach files to a tag, **Packages** hosts images and libraries, **Pages** hosts static sites.
+? Push protection acts... | after a leak | *before the push lands | once a month

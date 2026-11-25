@@ -1,0 +1,106 @@
+% ansible | Ansible | #7d2f2f | Why configuration tools exist, each part on its own, then playbooks, roles and safe rollouts.
+
+## Introduction
+# an-intro | Why Ansible exists | Beginner | Fifty servers, one tired administrator.
+@ a user 0 0 Admin
+@ c laptop 1 0 Ansible
+@ s1 server 2 0 Server 1
+@ s2 server 2 1 Server 2
+= By hand | PROBLEM
++ a s1 s2
+~ a>s1 ssh, 20 steps ;; !a>s2 forgot step 7
+" a Was it 20 or 21 steps?
+: s2 err different
+Every server is set up by typing. After a year no two are alike. This is **configuration drift**, and such servers are called *snowflakes*.
+= Scripts help, a little | PROBLEM
+* a
+" a The script fails if run twice.
+A shell script that creates a user fails the second time. It says *what to do*, not *how it should be*.
+= Describe the result | SOLUTION
++ c
+~ a>c playbook ;; c>s1 ;; c>s2
+: s1 ok same
+: s2 ok same
+Ansible reads a file that says how servers **should be**, connects over SSH and changes only what differs. Nothing is installed on them except Python.
+= How it helps
+| Need | Ansible |
+| New server | Minutes, same as the others |
+| Security fix | All servers at once |
+| Who changed what | Playbooks in Git |
+| Several steps on many machines | Ordered, in batches |
+= Its place
+" a Terraform builds, Ansible sets up.
+Puppet and Chef solve the same problem with agents. Terraform creates servers; Ansible configures them.
+? What is configuration drift? | A fast server | *Servers slowly becoming different | A network type
+^ https://docs.ansible.com/ Ansible documentation
+
+# an-history | A short history of Ansible | Beginner | From a small script to an automation platform.
+@h 1993 CFEngine ; 2005 Puppet ; 2009 Chef ; 2012 Ansible ; 2015 Red Hat ; 2020 Collections
+= 1993 | HISTORY
+**CFEngine** by Mark Burgess brings the idea of describing a desired state.
+= 2005 | HISTORY
+**Puppet** makes it popular.
+= 2009 | HISTORY
+**Chef** writes configuration as Ruby code.
+= 2012 | HISTORY
+Michael DeHaan releases **Ansible**: simple YAML, no agent. The name is a faster-than-light radio from the novels of Ursula K. Le Guin.
+= 2015 | HISTORY
+Red Hat buys Ansible.
+= 2020 | HISTORY
+Content moves into **collections**; the core becomes small.
+? The name Ansible comes from... | a city | *science fiction | a bank
+
+## Parts of Ansible
+# c-inv | Inventory | Beginner | The list of machines.
+@@ user Admin ; doc Inventory ; server Servers ; folder Groups
+= Without it | PROBLEM
+You type each server name each time.
+= What it is | SOLUTION
+A list of hosts in **groups** such as web, db.
+= How it works
+> [web]
+> web1
+> web2
+Cloud plugins can build it from AWS tags.
+= Real-time example | PRACTICE
+Auto Scaling adds servers at noon; the dynamic inventory already includes them.
+? Groups let you... | delete hosts | *address many hosts by one name | hide errors
+
+# c-module | Module and task | Beginner | One job done properly.
+@@ user Admin ; cube Module ; server Server ; card Task
+= Without it | PROBLEM
+Every admin writes their own script to create a user.
+= What it is | SOLUTION
+A **module** knows one job: packages, files, services, users, clouds. A **task** calls it.
+= How it works
+Modules check first. Already right: `ok`. Changed: `changed`.
+$ ansible web -m ansible.builtin.service -a "name=nginx state=started"
+= Real-time example | PRACTICE
+Run twice: first time 12 changed, second time 0. That proves the state is right.
+? Second run should report... | 12 changed | *0 changed | errors
+
+# c-pb | Playbook and handler | Beginner | The written plan.
+@@ user Admin ; doc Playbook ; server Servers ; flag Handler
+= Without it | PROBLEM
+Commands are lost in the terminal history.
+= What it is | SOLUTION
+A YAML file: which hosts, which tasks, in which order. A **handler** runs only when something changed.
+= How it works
+Change the nginx file, notify the handler, reload nginx once at the end.
+= Real-time example | PRACTICE
+Disaster: a data centre is lost. The playbook sets up 30 new servers in an hour.
+? A handler runs... | always | *when notified by a change | first
+
+# c-role | Role, variable, vault | Intermediate | Reuse and secrets.
+@@ user Admin ; folder Role ; server Servers ; key Vault
+= Without them | PROBLEM
+The same 80 tasks copied into ten playbooks, with a password inside.
+= What they are | SOLUTION
+A **role** is a reusable bundle. **Variables** adapt it. **Vault** encrypts secrets.
+= How it works
+The first command makes the folder layout of a new role. The second turns a readable file into an encrypted one.
+$ ansible-galaxy role init nginx
+$ ansible-vault encrypt secrets.yml
+= Real-time example | PRACTICE
+One `nginx` role serves twelve teams; each sets only its own domain name.
+? Vault is for... | speed | *encrypting secrets | logs

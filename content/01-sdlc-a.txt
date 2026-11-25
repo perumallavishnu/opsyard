@@ -1,0 +1,71 @@
+% sdlc | Software Lifecycles | #c8432b | How software gets planned, built and improved: why a life cycle exists, every model with its project scale, Scrum, Kanban, and working in Jira.
+
+## Introduction
+# sdlc-why | Why the SDLC exists | Beginner | What goes wrong without a process, and what a life cycle fixes.
+@ c user 0 0 Client
+@ d team 1 0 Dev team
+@ p board 1 1 Life cycle
+@ s rack 2 0 Software
+@ u team 2 1 Users
+= Code and fix | PROBLEM
++ c d s
+" c I need an app, fast.
+w c>d a phone call
+w !d>s code at once
+: s err bugs, late
+In the early days teams simply wrote code and repaired it until it seemed to work. This is **code-and-fix**. For a tiny program it is fine.
+For anything larger nobody knows what is finished, what is correct, or what it will cost.
+= The software crisis | PROBLEM
+" c It is two years late and over budget.
+" d Nobody wrote down what you wanted.
+: s err cancelled
+By the late 1960s programs had grown faster than the ways to manage them. Projects ran late, over budget, failed, or were never used. A NATO conference in 1968 in Garmisch, Germany, discussed this as the **software crisis** and made the term **software engineering** popular.
+= A shared plan of work | SOLUTION
++ p
+w c>p needs
+~ p>d clear tasks ;; d>s build
+: p ok agreed
+A life cycle answers for everyone: what happens now, who does it, what comes out, and how we know it is good enough to continue.
+= What it gives each person
++ u
+~ s>u useful
+" u It does what we asked for.
+| Person | What the SDLC gives |
+| Client | A cost, a date, and points to check progress |
+| Developer | Clear requirements instead of guesses |
+| Tester | Something written to test against |
+| Operations | A planned release and a way back |
+| Manager | Early signs of risk |
+= How it helped the industry grow
+* p s u
+~ p>d ;; d>s ;; s>u
+Because the steps are known, work can be shared by hundreds of people, in several countries, over many years. Banks, aircraft, hospitals and phones depend on this. Costs can be estimated, quality audited, and new staff trained.
+= Without it and with it
+| Without | With |
+| Requirements in someone's head | Written and agreed |
+| Bugs found by customers | Bugs found by testers |
+| One expert knows everything | Work can be handed over |
+| Release is a gamble | Release is a routine |
+A life cycle does not remove all problems. It makes them visible while they are still cheap.
+? What does a life cycle mainly do? | Makes code run faster | *Makes problems visible while they are cheap | Removes the need for testing
+^ https://aws.amazon.com/what-is/sdlc/ AWS: What is SDLC
+^ https://www.geeksforgeeks.org/software-development-life-cycle-sdlc/ GeeksforGeeks: SDLC
+
+# sdlc-history | A short history of software process | Beginner | From code-and-fix to DevOps.
+@h 1968 Software crisis ; 1970 Waterfall ; 1986 Spiral ; 1995 Scrum ; 2001 Agile Manifesto ; 2009 DevOps Days ; 2020 Scrum Guide
+= 1968: a name for the problem | HISTORY
+The NATO conference at Garmisch brings the words "software engineering" into common use: build software with the discipline of other engineering.
+= 1970: the waterfall paper | HISTORY
+Winston Royce describes large projects as a series of phases. The single pass he drew is remembered as **Waterfall**, although he warned it was risky and advised iterating.
+= 1986: risk first | HISTORY
+Barry Boehm presents the **Spiral model**: short rounds, each reducing the biggest risk. Iterative ideas spread.
+= 1995: Scrum | HISTORY
+Ken Schwaber and Jeff Sutherland present **Scrum**. Around the same years Extreme Programming (XP) appears.
+= 2001: the Agile Manifesto | HISTORY
+Seventeen practitioners meet in Snowbird, Utah, and agree on four values and twelve principles.
+= 2009: DevOps | HISTORY
+Patrick Debois organises the first **DevOps Days** in Ghent, Belgium. Development and operations start to work as one team.
+= Today | HISTORY
+The current Scrum Guide dates from November 2020. Most teams mix: Scrum or Kanban for planning, DevOps automation for delivery, and stricter models where safety law asks for them.
+? Which came first? | Scrum | *The waterfall paper | DevOps Days
+^ https://agilemanifesto.org/history.html History of the Agile Manifesto

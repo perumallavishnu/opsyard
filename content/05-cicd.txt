@@ -1,0 +1,162 @@
+% cicd | CI/CD | #0f6b63 | Pipelines, testing, artifacts, release strategies and GitOps, independent of any one tool.
+
+## Integration
+# ci | Continuous integration | Beginner | Merge small, build every change, fix red first.
+@ a laptop 0 0 Ana
+@ b laptop 0 1 Ben
+@ m db 1 0 main
+@ p gear 2 0 Build
+@ t shield 3 0 Test
+= Integration day | PROBLEM
++ a b m
+~ !a>m 3 weeks ;; !b>m 3 weeks
+: m err conflicts
+Two people work apart for weeks and merge at the end. Conflicts and surprises arrive together.
+= Merge daily | SOLUTION
+~ a>m small ;; b>m small
+: m ok healthy
+Continuous integration means everyone merges to the shared branch at least daily.
+= Build on a clean machine
++ p
+~ m>p trigger
+"Works on my machine" ends when a fresh machine builds every change from the repository alone.
+= Test
++ t
+~ p>t
+Run fast tests first. A pipeline under about ten minutes keeps people merging in small pieces.
+= Red means stop
+~ !t>m failed
+: m err red
+* m
+When main is red, fixing or reverting it comes before new work.
+! CI is a habit supported by a server. A server without the habit is only a build machine.
+? What should the team do when main turns red? | Wait for night build | *Fix or revert first | Disable the test
+
+# test-pyramid | Testing in the pipeline | Beginner | Many fast tests, few slow ones.
+@ u layer 0 0 Unit
+@ i layer 1 0 Integration
+@ c layer 1 1 Contract
+@ e layer 2 0 End to end
+@ g gate 3 0 Quality gate
+= Unit
++ u
+A unit test checks one function in isolation. Milliseconds each, thousands of them.
+= Integration
++ i
+~ u>i
+Integration tests check that parts work together: code with a real database in a container.
+= End to end
++ e
+~ i>e
+A browser clicks through the real system. Realistic, slow, easy to break. Keep few, for the most important journeys.
+= Contract
++ c
+* c
+Contract tests check that a service still answers the way its consumers expect, without starting them all.
+= Static checks and gate
++ g
+~ e>g
+: g ok open
+Linting, type checks, dependency and secret scans cost seconds. A **quality gate** stops the pipeline when a rule fails.
+= Flaky tests | RISK
+: e warn flaky
+A test that fails at random teaches people to ignore red. Quarantine it, fix it or delete it.
+? Which tests should be the most numerous? | End to end | *Unit | Manual
+
+## Delivery
+# artifact | Build once, promote everywhere | Intermediate | One artifact travels through every environment.
+@ b gear 0 0 Build
+@ r bucket 1 0 Registry
+@ d server 2 0 Dev
+@ s server 3 0 Staging
+@ p rack 4 0 Production
+@ c doc 3 1 Config
+= Rebuilding per environment | PROBLEM
++ b d p
+~ b>d build 1 ;; !b>p build 2
+If you build again for production, you deploy something nobody tested.
+= One artifact | SOLUTION
++ r
+~ b>r v1.8.2 ;; r>d same
+Build once, give it an immutable version or digest, store it in a registry.
+= Promote
++ s
+~ r>s same ;; r>p same
+Promotion moves **that same artifact** forward after each environment passes.
+= Configuration stays outside
++ c
+~ c>s settings ;; c>p settings
+Database URLs and feature switches differ per environment and are injected when it starts. Secrets come from a secret store.
+= Delivery or deployment?
+: p info approve
+**Continuous delivery**: every change is ready, a person decides when. **Continuous deployment**: every change that passes goes live automatically.
+? Why not rebuild for production? | It costs money | *The result may differ from what was tested | Registries forbid it
+
+# deploy-strategies | Deployment strategies | Intermediate | Recreate, rolling, blue-green, canary and flags.
+@ u team 0 1 Users
+@ lb router 1 1 Load balancer
+@ v1 pod 2 0 v1
+@ v1b pod 2 1 v1
+@ v2 pod 3 1 v2
+= Recreate
+" u The site is down!
++ u lb v1 v1b
+: v1 off stopped
+: v1b off stopped
+~ !u>lb error
+Stop everything old, start the new. Simple, with downtime.
+= Rolling
++ v2
+: v2 ok ready
+~ u>lb ;; lb>v1 ;; lb>v2
+Replace instances a few at a time. Both versions run together, so they must be compatible.
+= Blue-green
+~ u>lb ;; lb>v2 switch all
+: v2 ok live
+: v1 off idle
+Run a full second environment, test it, switch all traffic at once. Rollback is switching back. Costs double for a while.
+= Canary
+~ lb>v1 95% ;; lb>v2 5%
+: v2 warn watching
+Send a small share to the new version, compare error rate and latency, widen or stop.
+= Feature flags
+* v2
+~ u>lb flag on
+Deploying code and releasing a feature become separate. Turn it on for staff, then 10%, then all. Remove old flags.
+= Database changes | RISK
+: v1b warn old schema
+Use **expand and contract**: add the new column, write both, move data, read new, and only later drop the old one.
+!! Dropping a column while the old version still runs breaks it, and breaks rollback too.
+? Which strategy sends 5% of traffic first? | Blue-green | *Canary | Recreate
+
+# gitops | GitOps | Advanced | Git holds the desired state; an agent makes it real.
+@ d laptop 0 0 Developer
+@ g db 1 0 Config repo
+@ a gear 2 0 Argo CD
+@ k pod 3 0 Cluster
+@ x user 3 1 Manual change
+= Pushing from CI | PROBLEM
++ d g k
+~ !d>k cluster admin key
+If the pipeline pushes into the cluster, it holds powerful credentials, and nobody knows whether the cluster still matches Git.
+= Pull instead | SOLUTION
++ a
+~ d>g merge ;; a>g watch ;; a>k apply
+An agent inside the cluster, such as **Argo CD** or **Flux**, watches Git and applies changes.
+= Four principles
+* g
+Desired state is **declarative**, **versioned and immutable**, **pulled automatically**, and **continuously reconciled**.
+= Drift
++ x
+~ !x>k edit ;; a>k revert
+: k warn out of sync
+With self-heal on, a manual change is returned to what Git says. Without it, the drift is reported.
+= Rollback
+~ d>g git revert ;; a>k sync
+Rolling back is reverting a commit. The history of production is the Git log.
+= Secrets
+* g
+Never commit plain secrets. Use Sealed Secrets, SOPS or External Secrets.
+? Who applies changes in GitOps? | The CI job | *An agent that pulls from Git | The developer
+^ https://opengitops.dev/ OpenGitOps principles
+^ https://argo-cd.readthedocs.io/ Argo CD docs

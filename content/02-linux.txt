@@ -1,0 +1,187 @@
+% linux | Linux and Networking | #8a6d1d | The ground every DevOps tool stands on: shell, files, processes, services, networks and scripts.
+
+## Linux
+# linux-what | How Linux is put together | Beginner | Hardware, kernel, shell and the distribution around them.
+@ you user 0 0 You
+@ sh laptop 1 0 Shell
+@ k gear 2 0 Kernel
+@ hw rack 3 0 Hardware
+@ pkg box 1 1 Packages
+= You type, something runs
++ you sh
+~ you>sh command
+The **shell** (often Bash) reads your command, finds the program and starts it.
+= The kernel
++ k hw
+~ sh>k system call ;; k>hw control
+Programs may not touch hardware. They ask the **kernel** through system calls: open a file, send a packet, start a process.
+= Distributions
++ pkg
+* pkg
+A distribution is the kernel plus tools plus a package manager. **Ubuntu** and **Debian** use `apt`. **RHEL** and **Fedora** use `dnf`. **Alpine** uses `apk` and is common in containers. **Kali** is Debian-based and ships security testing tools.
+= Everything has a place
+`/etc` configuration, `/var/log` logs, `/home` users, `/usr/bin` programs, `/tmp` temporary files, `/proc` live kernel information.
+$ ls -l /etc/os-release
+$ uname -r
+= Why DevOps needs it
+~ you>sh ;; sh>k
+Most servers, containers and CI runners use Linux. When a deployment fails, you will be reading its logs in a shell.
+? Who may control hardware directly? | The shell | *The kernel | Any package
+
+# linux-perm | Users and permissions | Beginner | Who may read, write and run each file.
+@ u user 0 0 Owner
+@ g team 0 1 Group
+@ o cloud 0 2 Others
+@ f doc 2 1 deploy.sh
+= Three audiences
+~ u>f ;; g>f ;; o>f
+Each file has an owner and a group. Everyone else is "others". Each audience gets read, write and execute separately.
+$ ls -l deploy.sh
+> -rwxr-x--- 1 ana ops 812 deploy.sh
+= Read the string
+* u f
+: u ok rwx
+: g info r-x
+: o off ---
+`rwx` owner, `r-x` group, `---` others. On a directory, `x` means "may enter".
+= As numbers
+Read 4, write 2, execute 1. Add them: `rwx` = 7, `r-x` = 5, nothing = 0. So this file is 750.
+$ chmod 750 deploy.sh
+$ chown ana:ops deploy.sh
+= The 777 trap | RISK
+* o
+: o err rwx
+~ !o>f anyone edits
+`chmod 777` lets every account change the script that your server later runs.
+!! Never fix "permission denied" with 777. Find which user needs access and grant only that.
+= sudo
+* u
+`sudo` runs one command as root and records it. Work as a normal user and use sudo only when needed.
+? chmod 640 gives the group... | write | *read | nothing
+
+# linux-proc | Processes, services and logs | Beginner | What is running, and how systemd keeps it running.
+@ sys gear 0 0 systemd
+@ web server 1 0 nginx
+@ app server 1 1 app
+@ log doc 2 0 journal
+@ you user 2 1 You
+= A process
++ web app sys
+~ sys>web starts ;; sys>app starts
+A process is a running program with a number (PID). On most distributions **systemd** is PID 1 and starts the rest.
+$ ps aux
+$ top
+= Signals
++ you
+~ you>app TERM
+`kill` sends a signal. **TERM** asks it to finish cleanly. **KILL** stops it at once with no cleanup.
+!! Try TERM first. KILL can leave half-written files.
+= Services
+* sys
+$ sudo systemctl status nginx
+$ sudo systemctl restart nginx
+$ sudo systemctl enable --now nginx
+`start` is for now. `enable` is for every boot.
+= It crashed | PROBLEM
+: app err exited
+~ app>log last words
++ log
+With `Restart=on-failure` in its unit file, systemd starts it again. Then read why it died.
+= Read the journal
+The journal collects output from every service. `-u` picks one service, `-f` follows it live, `-p err` shows errors only.
+* log
+~ log>you
+$ journalctl -u app -n 50 --no-pager
+$ journalctl -u app -f
+$ journalctl -p err --since "1 hour ago"
+? Which command makes a service start at boot? | systemctl start | *systemctl enable | systemctl status
+
+# shell-script | Shell scripting | Beginner | From one command to a safe script.
+@ a doc 0 0 access.log
+@ g gear 1 0 grep
+@ s gear 2 0 sort
+@ u gear 3 0 uniq
+@ o laptop 4 0 Result
+= Pipes
+~ a>g lines ;; g>s errors ;; s>u sorted ;; u>o counts
+Small programs, joined. Each `|` sends one program's output to the next one's input.
+$ grep " 500 " access.log | sort | uniq -c
+= Redirection
+* o
+`>` replaces a file, `>>` appends, `2>` catches errors.
+$ ./build.sh > build.log 2>&1
+= Variables and quoting
+$ name="my file.txt"
+$ cp "$name" /backup/
+Quote variables. Without quotes a space splits one filename into two.
+= Exit codes
+Every command returns a number: 0 means success, anything else is failure. CI systems decide red or green from this.
+$ npm test && ./deploy.sh
+= Safe by default | PRACTICE
+* g
+: g ok stops on error
+$ #!/usr/bin/env bash
+$ set -euo pipefail
+`-e` stop on error, `-u` stop on an unset variable, `pipefail` notice a failure anywhere in a pipe.
+!! `rm -rf "$DIR/"` with an empty DIR means the root directory. `set -u` and `${DIR:?}` protect you.
+? What does exit code 0 mean? | Failure | *Success | Not started
+
+## Networking
+# net-basics | IP, ports and DNS | Beginner | How a name becomes a connection.
+@ c laptop 0 1 Your laptop
+@ r router 1 1 Router
+@ dns db 2 0 DNS resolver
+@ w server 3 1 Web server
+= Addresses
++ c r w
+~ c>r ;; r>w
+Each machine has an IP address. `10.x`, `172.16-31.x` and `192.168.x` are private and not routed on the internet.
+`10.0.1.0/24` means the first 24 bits are fixed: 256 addresses.
+= Names
++ dns
+~ c>dns shop.example? ;; dns>c 203.0.113.10
+People use names. **DNS** translates: A (IPv4), AAAA (IPv6), CNAME (alias), MX (mail), TXT (text). The TTL says how long to cache an answer.
+$ dig +short shop.example
+= Ports
+~ c>w :443
+* w
+A port picks the program on that machine: 22 SSH, 53 DNS, 80 HTTP, 443 HTTPS, 5432 PostgreSQL, 6443 Kubernetes API.
+$ ss -tlnp
+= Firewall
+: r warn 443 only
+~ !c>w :5432
+A firewall allows or drops traffic by address and port. "Connection timed out" often means dropped. "Connection refused" means you reached the machine but nothing listens there.
+= Debug in order | PRACTICE
+Name, then route, then port, then application.
+$ dig shop.example
+$ ping -c 3 203.0.113.10
+$ nc -vz 203.0.113.10 443
+$ curl -v https://shop.example
+? "Connection refused" usually means... | DNS failed | *nothing listens on that port | the password is wrong
+
+# ssh-tls | SSH and HTTPS | Intermediate | Two ways to prove identity and encrypt.
+@ c laptop 0 0 Client
+@ k key 0 1 Private key
+@ s server 2 0 Server
+@ ca shield 2 1 Certificate authority
+= SSH key pair
++ c k s
+* k
+A private key stays with you. The matching public key goes in `~/.ssh/authorized_keys` on the server.
+$ ssh-keygen -t ed25519
+$ ssh-copy-id ana@server
+= Logging in
+~ c>s hello ;; s>c challenge ;; c>s signature
+The client signs data tied to this session with the private key. The key itself never travels.
+= Know the host
+: s warn new host key
+The first time, SSH shows the server's fingerprint. Check it. If it changes later, stop and find out why.
+= HTTPS
++ ca
+~ ca>s certificate ;; s>c certificate ;; c>s encrypted
+TLS proves the server owns its name using a certificate signed by an authority your browser trusts, then agrees on fresh keys for encryption.
+= Expiry | PRACTICE
+: s err expired
+Certificates expire. Automate renewal with ACME (Let's Encrypt, cert-manager) and alert well before the date.
+$ openssl s_client -connect shop.example:443 -servername shop.example
+? What crosses the network during SSH key login? | The private key | *A signature | The password

@@ -1,0 +1,228 @@
+% jenkins | Jenkins | #a33a52 | The automation server: controller and agents, Jenkinsfiles, plugins, credentials, scaling and care.
+
+## Basics
+# jk-what | What Jenkins is | Beginner | Purpose, parts and the path of a build.
+@ d laptop 0 0 Developer
+@ g db 1 0 Git
+@ c gear 2 0 Controller
+@ a server 3 0 Agent
+@ r bucket 3 1 Registry
+@ n card 2 1 Notification
+= Purpose
++ d g c
+~ d>g push ;; g>c webhook
+Jenkins is an open-source automation server. It watches for events and runs jobs: build, test, package, deploy. It is free, self-hosted and has a very large plugin library.
+= Controller
+* c
+The controller stores configuration, schedules builds, serves the web page. It should not run builds itself.
+= Agent
++ a
+~ c>a run ;; a>c log
+Agents do the work. Each has **executors** (parallel slots) and **labels** such as `linux` or `docker`.
+= Result
++ r n
+~ a>r image ;; c>n passed
+The build publishes artifacts and tells people.
+= When to choose it | PRACTICE
+Choose Jenkins for self-hosting, unusual environments or heavy customisation. Hosted CI such as GitHub Actions has less to maintain. With Jenkins, upgrades and security are yours.
+? Where should builds run? | On the controller | *On agents | On the developer laptop
+^ https://www.jenkins.io/doc/ Jenkins documentation
+
+# jk-install | Installing and first setup | Beginner | Java, LTS, unlocking and the home folder.
+@ j box 0 0 Java 21 or 25
+@ c gear 1 0 Jenkins LTS
+@ h folder 2 0 JENKINS_HOME
+@ u user 1 1 Admin
+@ b bucket 2 1 Backup
+= Java first
++ j
+From LTS 2.555.1 (April 2026) Jenkins needs **Java 21 or 25** on controller and agents. Java 17 is no longer accepted.
+= Run it
++ c
+~ j>c
+$ docker run -d --name jenkins -p 8080:8080 -v jenkins_home:/var/jenkins_home jenkins/jenkins:lts-jdk21
+Choose **LTS** for stability. Weekly releases bring features sooner.
+= Unlock
+" u First login done.
++ u
+~ u>c password
+$ docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+Paste it, install suggested plugins, create a real admin account.
+= JENKINS_HOME
++ h
+~ c>h stores
+Jobs, build history, plugins and encrypted credentials live here.
+= Back it up
++ b
+~ h>b nightly
+: b ok tested restore
+Back up the whole folder including `secrets/`, or credentials cannot be decrypted. Practise restoring.
+? Which Java does current Jenkins LTS need? | 11 | 17 | *21 or 25
+^ https://www.jenkins.io/doc/book/platform-information/support-policy-java/ Java support policy
+
+# jk-jobs | Job types and triggers | Beginner | Freestyle, Pipeline, Multibranch and what starts them.
+@ w flag 0 0 Webhook
+@ t flag 0 1 Cron
+@ m flag 0 2 Upstream job
+@ f doc 1 0 Freestyle
+@ p board 1 1 Pipeline
+@ mb folder 1 2 Multibranch
+@ b gear 2 1 Build
+= Freestyle
++ f b
+~ f>b
+Configured by clicking. Easy to start, hard to review: the setup lives only in Jenkins.
+= Pipeline
++ p
+~ p>b
+The steps are code in a **Jenkinsfile** stored with the application.
+= Multibranch
++ mb
+~ mb>b per branch
+Jenkins scans a repository and creates a job for every branch and pull request with a Jenkinsfile. Organization Folders scan many repositories.
+= Triggers
++ w t m
+~ w>f ;; t>p ;; m>mb
+**Webhooks** are instant. **Cron** runs on time: `H 2 * * *` is nightly, and `H` spreads load. **Upstream** starts after another job. Polling works but wastes requests.
+= Parameters
+* p
+A build can ask for input: version, environment, yes or no.
+!! Treat parameters as untrusted. Never paste them straight into a shell command.
+? Which type makes a job per branch? | Freestyle | *Multibranch | Cron
+
+## Pipelines
+# jk-file | Writing a Jenkinsfile | Intermediate | Stages, steps, post, and parallel work.
+@ s1 gear 0 0 Checkout
+@ s2 gear 1 0 Build
+@ s3 shield 2 0 Unit tests
+@ s4 shield 2 1 Lint
+@ s5 box 3 0 Package
+@ po card 4 0 Post
+= Skeleton
++ s1 s2
+~ s1>s2
+> pipeline {
+>   agent { label 'linux' }
+>   stages {
+>     stage('Build') { steps { sh 'npm ci && npm run build' } }
+>   }
+> }
+Declarative pipeline has a fixed structure: agent, stages, steps. **Scripted** pipeline is freer Groovy; prefer declarative.
+= Parallel
++ s3 s4
+~ s2>s3 ;; s2>s4
+> stage('Checks') { parallel {
+>   stage('Unit') { steps { sh 'npm test' } }
+>   stage('Lint') { steps { sh 'npm run lint' } }
+> } }
+Independent work runs side by side.
+= Conditions
++ s5
+~ s3>s5 main only
+> stage('Package') { when { branch 'main' } steps { sh './package.sh' } }
+`when` decides whether a stage runs.
+= Options
+* s2
+> options { timeout(time: 20, unit: 'MINUTES'); buildDiscarder(logRotator(numToKeepStr: '30')); disableConcurrentBuilds() }
+Time limits stop stuck builds; discarding old builds saves disk.
+= Post
++ po
+~ s5>po
+> post { always { junit 'reports/*.xml' } failure { echo 'notify team' } cleanup { cleanWs() } }
+Runs after the stages: `always`, `success`, `failure`, `unstable`, `changed`, `cleanup`.
+= Approval
+: s5 warn waiting
+`input` pauses for a person. Use it outside an agent so no executor is held while waiting.
+? Which block runs whatever the result? | post success | *post always | when
+
+# jk-cred | Credentials and shared libraries | Intermediate | Secrets in builds, and reusing pipeline code.
+@ v key 0 0 Credentials
+@ c gear 1 0 Controller
+@ a server 2 0 Agent
+@ l db 1 1 Shared library
+@ lo doc 2 1 Build log
+= In the Jenkinsfile? | PROBLEM
++ a lo
+~ !a>lo password
+A password in code is visible to everyone and forever in history.
+= Credentials store | SOLUTION
++ v c
+~ v>c ;; c>a for one block
+> withCredentials([string(credentialsId: 'npm-token', variable: 'NPM_TOKEN')]) {
+>   sh 'npm publish'
+> }
+Refer by ID. Jenkins masks the value in logs.
+= Single quotes matter
+: lo err leaked
+* lo
+`sh "curl $TOKEN"` in double quotes lets Groovy insert the secret. Single quotes leave it for the shell.
+!! Masking is not perfect. A build can still print an encoded secret, so limit who may change pipelines.
+= Scope
+* v
+Put credentials in the folder that needs them. Prefer short-lived cloud roles.
+= Shared library
++ l
+~ l>c load
+> @Library('acme-lib@v3') _
+> standardNodePipeline(nodeVersion: '24')
+Fifty Jenkinsfiles with the same 80 lines become one call. Functions live in `vars/`. Pin a version.
+? Why single quotes around a secret in sh? | Speed | *Groovy does not insert the secret | Required syntax
+
+## Running it
+# jk-agents | Agents and scaling | Advanced | Static, SSH, Docker and Kubernetes agents.
+@ c gear 0 0 Controller
+@ q queue 1 0 Queue
+@ s server 2 0 SSH agent
+@ d box 2 1 Docker agent
+@ k pod 2 2 Kubernetes pod
+= Queue grows | PROBLEM
++ c q
+~ c>q builds
+: q err 40 waiting
+One machine cannot keep up, and tools for different projects clash.
+= Static agents
++ s
+~ q>s
+A machine connected over SSH, or inbound when it sits behind a firewall.
+= Docker agents
++ d
+~ q>d
+> agent { docker { image 'node:24' } }
+Each build runs in a clean container with the right tools.
+= Kubernetes agents
++ k
+~ q>k new pod ;; k>c done
+The Kubernetes plugin starts a pod per build and removes it. Capacity follows demand.
+= Isolation | RISK
+: d warn docker.sock
+Mounting the Docker socket gives a build root-like control of that host. Use rootless builders such as BuildKit rootless or Buildah.
+? Which agent type disappears after each build? | Static SSH | *Kubernetes pod | Controller
+
+# jk-ops | Securing and maintaining Jenkins | Advanced | Access, plugins, configuration as code.
+@ u user 0 0 User
+@ au shield 1 0 Auth
+@ c gear 2 0 Controller
+@ p box 2 1 Plugins
+@ j doc 3 0 JCasC
+@ m gauge 3 1 Metrics
+= Who may do what
++ u au c
+~ u>au ;; au>c
+Connect single sign-on. Authorise with matrix or role-based strategy. Nobody needs admin for daily work.
+= Plugins
++ p
+: p warn update
+Install few. Each plugin is code with access to your server. Follow security advisories and update on schedule, on a test instance first.
+= Configuration as Code
++ j
+~ j>c apply
+The **JCasC** plugin sets up Jenkins from YAML, so you can rebuild and review it.
+= Watch it
++ m
+~ c>m
+Track queue time, executor use, disk space and failed builds. Disk filling with old builds is the classic outage.
+= Keep it private | RISK
+* c
+: c err public
+Do not expose Jenkins straight to the internet. Put it behind VPN or an authenticating proxy; it holds keys to production.
+? JCasC lets you... | write plugins | *define Jenkins setup in YAML | run builds faster

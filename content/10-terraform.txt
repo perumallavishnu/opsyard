@@ -1,0 +1,174 @@
+% terraform | Terraform and IaC | #5f3d99 | Infrastructure as code: plan, state, modules, teams and drift.
+
+## Basics
+# tf-what | Infrastructure as code | Beginner | Describe infrastructure in files, review it, apply it.
+@ u user 0 0 Engineer
+@ con laptop 1 0 Web console
+@ f doc 1 1 main.tf
+@ t gear 2 1 Terraform
+@ c cloud 3 1 Cloud
+= Click by click | PROBLEM
+" u Was that setting on or off?
++ u con c
+~ u>con click ;; !con>c forgot a setting
+Nobody can review clicks, repeat them exactly, or know who changed what.
+= As code | SOLUTION
+The same bucket as text: reviewable in a pull request and repeatable in another account.
++ f t
+~ u>f write ;; f>t ;; t>c create
+> resource "aws_s3_bucket" "logs" {
+>   bucket = "acme-logs-prod"
+> }
+= Declarative
+* f
+You state the result. Terraform works out what to create, change or remove, in dependency order.
+= Providers
+* t
+~ t>c API
+Providers translate to APIs: AWS, Azure, Google, Kubernetes, GitHub and many more.
+= Terraform and OpenTofu
+Terraform moved to the Business Source License in 2023. **OpenTofu** is the open-source fork under the Linux Foundation; the language is largely the same.
+? Terraform files describe... | commands in order | *the desired result | server logs
+^ https://developer.hashicorp.com/terraform/docs Terraform docs
+
+# tf-flow | init, plan, apply, destroy | Beginner | The everyday cycle.
+@ f doc 0 0 Config
+@ p card 1 0 Plan
+@ s db 1 1 State
+@ a gear 2 0 Apply
+@ c cloud 3 0 Cloud
+= init
++ f
+$ terraform init
+Downloads providers and modules, sets up the backend, writes `.terraform.lock.hcl`. Commit that lock file.
+= plan
++ p s
+~ f>p want ;; s>p have
+$ terraform plan -out=tfplan
+Refreshes state from the cloud and compares it to your files.
+= Read it
+* p
+: p warn -/+ replace
+`+` create, `~` update in place, `-` destroy, `-/+` **replace**. A replaced database loses its data.
+= apply
++ a c
+~ p>a ;; a>c create ;; a>s record
+$ terraform apply tfplan
+Applies exactly that saved plan.
+= destroy | RISK
+~ !a>c remove
+$ terraform destroy
+`prevent_destroy` in `lifecycle` guards critical resources.
+? What does -/+ mean? | Update in place | *Destroy and recreate | No change
+
+## State and structure
+# tf-state | State, backends and locking | Intermediate | Terraform's memory.
+@ a laptop 0 0 Ana
+@ b laptop 0 1 Ben
+@ l key 1 1 Lock
+@ s bucket 1 0 Remote state
+@ c cloud 2 0 Cloud
+= Why state
++ a s c
+~ a>s ;; s>c maps
+State links `aws_instance.web` to the real `i-0abc`. Without it Terraform would not know what it owns.
+= On a laptop | PROBLEM
++ b
+~ !b>c second copy
+Two state files means two people fighting over the same infrastructure.
+= Remote backend | SOLUTION
+~ a>s ;; b>s
+> terraform {
+>   backend "s3" {
+>     bucket = "acme-tfstate"
+>     key = "prod/app.tfstate"
+>     region = "eu-west-1"
+>     use_lockfile = true
+>   }
+> }
+Turn on bucket versioning.
+= Locking
++ l
+~ a>l held ;; !b>l wait
+`use_lockfile` uses S3 itself. The older DynamoDB method is **deprecated**.
+= Secrets | RISK
+* s
+: s warn sensitive
+State may hold passwords in plain text. Encrypt and restrict it. Ephemeral values and write-only arguments, in recent versions, keep some secrets out.
+= Change state safely
+$ terraform state list
+Use `moved`, `import` and `removed` blocks so changes are reviewed, instead of editing state by hand.
+? Recommended S3 locking today? | DynamoDB | *use_lockfile | No lock
+^ https://developer.hashicorp.com/terraform/language/backend/s3 S3 backend
+
+# tf-mod | Variables, outputs, modules | Intermediate | Reuse without copying.
+@ v doc 0 0 Variables
+@ r folder 1 0 Root module
+@ n box 2 0 network module
+@ d box 2 1 app module
+@ o card 3 0 Outputs
+= Variables
+Typed inputs with validation, so a wrong value fails at plan time rather than in production.
++ v r
+~ v>r
+> variable "env" {
+>   type = string
+>   validation {
+>     condition = contains(["dev","prod"], var.env)
+>     error_message = "dev or prod"
+>   }
+> }
+= Modules
++ n d
+~ r>n ;; r>d
+> module "network" {
+>   source = "terraform-aws-modules/vpc/aws"
+>   version = "~> 6.0"
+>   cidr = "10.0.0.0/16"
+> }
+A module is a folder of `.tf` files with inputs and outputs. Pin versions.
+= Outputs
++ o
+~ n>o vpc_id ;; o>r
+Values other code can read.
+= for_each
+* d
+> for_each = toset(["a","b","c"])
+Prefer `for_each` to `count`: removing the middle item of a counted list shifts the rest and may recreate them.
+= Data sources
+* r
+`data` blocks read things Terraform does not manage, such as the newest machine image.
+? Why for_each over count? | Faster | *Stable keys | Cheaper
+
+# tf-team | Teams, testing and drift | Advanced | Running it in a pipeline.
+@ d laptop 0 0 Engineer
+@ pr board 1 0 Pull request
+@ ci gear 2 0 CI plan
+@ pol shield 2 1 Policy
+@ c cloud 3 0 Cloud
+@ x user 3 1 Manual change
+= Plan on pull request
++ d pr ci
+~ d>pr ;; ci>pr plan
+The plan appears on the pull request. Reviewers read the effect, not only the code.
+= Check
++ pol
+~ ci>pol
+$ terraform fmt -check
+$ terraform validate
+$ terraform test
+$ trivy config .
+Policy as code (OPA, Sentinel): "no public buckets".
+= Apply after merge
++ c
+~ ci>c apply
+CI gets short-lived cloud access by OIDC. People need not hold admin keys.
+= Drift
++ x
+~ !x>c console edit ;; ci>pr drift found
+$ terraform plan -detailed-exitcode
+Exit code 2 means changes. Schedule it.
+= Split state | PRACTICE
+* ci
+Separate by environment and by rate of change: network, data, apps. A smaller blast radius and quicker plans.
+? `plan -detailed-exitcode` returning 2 means... | error | no changes | *changes exist

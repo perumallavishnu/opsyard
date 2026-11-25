@@ -1,0 +1,332 @@
+% docker | Docker | #1f5fa8 | Images, containers, storage, networks, Compose and secure builds, with what happens underneath.
+
+## Containers
+# dk-why | Why containers | Beginner | Package the app with everything it needs.
+@ l laptop 0 0 Laptop
+@ s server 2 0 Server
+@ c box 1 0 Container
+@ vm rack 1 1 Virtual machine
+= Works on my machine | PROBLEM
+" s Python 3.9 here, not 3.14.
++ l s
+~ !l>s copy code
+: s err wrong version
+The server has another Python, another library, another config.
+= Ship the environment | SOLUTION
++ c
+~ l>c pack ;; c>s run
+: s ok same
+An **image** holds the app, libraries and settings. A running image is a **container**.
+= Not a virtual machine
++ vm
+* vm c
+A VM boots its own kernel and takes gigabytes. A container is a normal process that shares the host kernel, isolated from others. It starts in milliseconds to seconds.
+= How isolation works
+* c
+Linux **namespaces** limit what it sees: processes, network, files, users. **cgroups** limit what it uses: CPU and memory. A layered filesystem gives it its own root.
+= What it is not | RISK
+Sharing a kernel is weaker isolation than a VM. For untrusted code add a sandbox such as gVisor or a microVM.
+? What limits a container's memory? | Namespaces | *cgroups | The image
+^ https://docs.docker.com/get-started/ Docker docs
+
+# dk-arch | Docker architecture | Beginner | Client, daemon, containerd and registry.
+@ cli laptop 0 0 docker CLI
+@ d gear 1 0 dockerd
+@ cd gear 2 0 containerd
+@ rc gear 3 0 runc
+@ c box 4 0 Container
+@ r cloud 1 1 Registry
+= You type a command
++ cli d
+~ cli>d REST API
+$ docker run -d -p 8080:80 nginx
+The client sends it to the daemon.
+= Find the image
++ r
+~ d>r pull nginx ;; r>d layers
+Not present locally, so it is pulled from Docker Hub. The full name is `docker.io/library/nginx:latest`.
+= Hand over
++ cd
+~ d>cd
+**containerd** manages images and container life. Since Engine 29 its image store is the default on fresh installs.
+= Create the process
++ rc c
+~ cd>rc ;; rc>c start
+**runc** sets up namespaces and cgroups, starts the process, and exits.
+= The result
+: c ok :8080
+Port 8080 on the host now reaches port 80 in the container.
+$ docker ps
+= Lock the socket | RISK
+The CLI reaches the daemon through `/var/run/docker.sock`. The daemon runs as root and can mount any host folder into a container.
+* d
+: d warn root power
+!! Anyone who can use the Docker socket effectively has root on that host.
+? What actually creates the container process? | The CLI | *runc | The registry
+
+# dk-life | Container life cycle | Beginner | Create, run, stop, inspect, remove.
+@ i stack 0 0 Image
+@ c box 1 0 Created
+@ r box 2 0 Running
+@ s box 3 0 Stopped
+@ x bucket 3 1 Removed
+= Create and start
++ i c r
+~ i>c create ;; c>r start
+$ docker run -d --name web nginx
+`run` is create plus start. `-d` runs in the background.
+= Look inside
+`logs` shows what the app printed, `exec` opens a shell beside it, `stats` shows live resource use, and `inspect` prints the full configuration.
+* r
+$ docker logs -f web
+$ docker exec -it web sh
+$ docker stats
+$ docker inspect web
+= Stop
++ s
+~ r>s SIGTERM
+$ docker stop web
+Sends SIGTERM, waits 10 seconds by default, then SIGKILL. The main process (PID 1) must handle SIGTERM to finish cleanly.
+= Exit codes
+: s err 137
+0 clean. 1 app error. 137 killed by SIGKILL, often out of memory. 143 stopped by SIGTERM. 127 command not found.
+= Restart policy
+`no` is the default. `on-failure` restarts after an error. `always` and `unless-stopped` also come back after a reboot; the second respects a manual stop.
+~ s>r restart
+$ docker run -d --restart unless-stopped nginx
+= Remove
++ x
+~ s>x rm
+$ docker rm web
+Files written inside the container are gone. Data you need belongs in a volume.
+? Exit code 137 often means... | Command not found | *Killed, often out of memory | Clean exit
+
+## Images
+# dk-file | Writing a Dockerfile | Beginner | Each instruction and the layer it makes.
+@ f doc 0 0 Dockerfile
+@ b layer 1 0 FROM
+@ d layer 2 0 RUN npm ci
+@ c layer 3 0 COPY . .
+@ i stack 4 0 Image
+= Base
++ f b
+~ f>b
+> FROM node:24-slim
+> WORKDIR /app
+`FROM` picks a starting image. Pin a version, not `latest`.
+= Dependencies
++ d
+~ b>d
+> COPY package*.json ./
+> RUN npm ci --omit=dev
+`COPY` adds files, `RUN` executes at build time.
+= Application
++ c
+~ d>c
+> COPY . .
+> USER node
+> EXPOSE 3000
+> CMD ["node", "server.js"]
+`USER` drops root. `EXPOSE` only documents a port. `CMD` is the default command.
+= Build
+The final dot is the **build context**: the folder whose files the build may copy. BuildKit runs the instructions and names the result.
++ i
+~ c>i
+$ docker build -t shop:1.0 .
+= Layer cache
+* d c
+: d ok cached
+: c warn rebuilt
+If a layer's inputs did not change, it is reused; everything after a change is rebuilt. Copy dependency files **before** source code.
+= ENTRYPOINT and CMD
+* i
+ENTRYPOINT is the program, CMD its default arguments. Use the JSON form so signals reach your process. Add a `.dockerignore` for `node_modules`, `.git` and secrets.
+? Why copy package.json before the source? | It is required | *Dependencies stay cached when code changes | Smaller image
+
+# dk-multi | Small and safe images | Intermediate | Multi-stage builds, secrets, scanning, platforms.
+@ b gear 0 0 Build stage
+@ t box 1 0 Final image
+@ s shield 2 0 Scanner
+@ g key 1 1 Signature
+@ r bucket 3 0 Registry
+= Too big | PROBLEM
++ b
+: b err 1.2 GB
+Compilers and test tools in production are slow to pull and give attackers more to use.
+= Multi-stage | SOLUTION
+The first stage has the compiler. The second starts from a tiny base and copies only the finished program.
++ t
+~ b>t only the binary
+: t ok 25 MB
+> FROM golang:1.26 AS build
+> WORKDIR /src
+> COPY . .
+> RUN CGO_ENABLED=0 go build -o /app
+> FROM gcr.io/distroless/static
+> COPY --from=build /app /app
+> USER nonroot
+> ENTRYPOINT ["/app"]
+= Build secrets
+* b
+~ b>t
+$ docker build --secret id=npm,src=.npmrc .
+Secrets mounted during one RUN do not stay in a layer. ARG and ENV do.
+= Scan
++ s
+~ t>s
+$ docker scout cves shop:1.0
+$ trivy image shop:1.0
+Rebuild regularly: base images receive fixes.
+= Sign and publish
++ g r
+~ t>g cosign ;; t>r push
+$ docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/acme/shop:1.0 --push .
+Deploy by **digest** (`@sha256:...`), which cannot be moved as a tag can.
+? What does multi-stage remove? | The app | *Build tools from the final image | The need for tags
+
+## Data and networks
+# dk-vol | Volumes and storage | Beginner | Keeping data when containers go away.
+@ c box 0 0 Container
+@ w layer 1 0 Writable layer
+@ v db 1 1 Volume
+@ h folder 2 1 Bind mount
+@ t small 2 0 tmpfs
+= Data disappears | PROBLEM
++ c w
+~ c>w write
+: w err lost on rm
+Files written in a container go to a thin layer that dies with it.
+= Volumes | SOLUTION
++ v
+~ c>v /var/lib/postgresql
+$ docker volume create pgdata
+$ docker run -d -e POSTGRES_PASSWORD=dev -v pgdata:/var/lib/postgresql postgres:18
+Docker manages the place. The volume outlives containers.
+PostgreSQL 18 images expect the mount at `/var/lib/postgresql`; version 17 and older used `/var/lib/postgresql/data`.
+= Bind mounts
++ h
+~ c>h host path
+$ docker run --rm -v "$PWD":/app -w /app node:24 npm test
+A host folder appears inside. Good for development.
+= tmpfs
++ t
+~ c>t memory
+In memory only: for short-lived sensitive files.
+= Back up
+* v
+$ docker run --rm -v pgdata:/d -v "$PWD":/b alpine tar czf /b/pgdata.tgz /d
+Stop the database first, or use its own dump tool, so the copy is consistent.
+!! `docker compose down -v` and `docker volume prune` delete data.
+? Best place for database files? | Writable layer | *Volume | tmpfs
+
+# dk-net | Container networking | Intermediate | Bridges, names and published ports.
+Z br 1 0 2 2 bridge: shopnet
+@ u user 0 0 Browser
+@ h router 0 1 Host port 8080
+@ w box 1 0 web
+@ a box 2 0 api
+@ d db 2 1 db
+= Default bridge
++ w a
+Each container gets its own network and a private IP on a bridge. On the default bridge, names do not resolve.
+= Your own network
++ br d
+~ w>a http://api:3000 ;; a>d db:5432
+$ docker network create shopnet
+$ docker run -d --name api --network shopnet shop-api
+On a user-defined network containers find each other **by name**.
+= Publish
++ u h
+~ u>h :8080 ;; h>w :80
+$ docker run -d -p 8080:80 --network shopnet web
+`-p host:container`. Only publish what outsiders need.
+= Inside localhost | PROBLEM
+~ !a>w localhost
+* a
+Inside a container, `localhost` is that container. Use the other container's name.
+= Other drivers
+* br
+`host` shares the host network. `none` has none. `overlay` spans hosts in Swarm. `macvlan` gives a LAN address.
+!! Published ports can bypass ufw rules. Bind to `127.0.0.1:8080:80` when only local access is needed.
+? From `api`, how do you reach `db`? | localhost:5432 | *db:5432 | 127.0.0.1
+
+## Many containers
+# dk-compose | Docker Compose | Intermediate | One file, one command, a whole system.
+Z p 1 0 2 3 project: shop
+@ y doc 0 0 compose.yaml
+@ w box 1 0 web
+@ a box 2 0 api
+@ d db 2 1 db
+@ v bucket 2 2 pgdata
+= Describe it
++ y
+> services:
+>   web:
+>     build: ./web
+>     ports: ["8080:80"]
+>   api:
+>     build: ./api
+>     depends_on:
+>       db: { condition: service_healthy }
+Services, networks and volumes in one file. The old `version:` line is obsolete.
+= Start it
++ p w a d
+~ y>w ;; y>a ;; y>d
+$ docker compose up -d
+$ docker compose ps
+$ docker compose logs -f api
+Compose makes a network; services reach each other by name.
+= Health
+: d ok healthy
+~ d>a ready
+>   db:
+>     image: postgres:18
+>     healthcheck:
+>       test: ["CMD-SHELL", "pg_isready -U postgres"]
+Plain `depends_on` waits for start. `service_healthy` waits until ready.
+= Data and settings
++ v
+~ d>v
+Declare volumes at the bottom. Put local settings in `.env` and keep it out of Git.
+= Develop
+~ y>a watch
+$ docker compose watch
+Watch syncs files or rebuilds when code changes. **Profiles** start optional services.
+= Beyond one host
+* p
+Compose is for one machine: development, tests, small servers. For many machines use Kubernetes.
+? `depends_on` alone guarantees the database is... | healthy | *started | backed up
+
+# dk-sec | Container security | Advanced | Least privilege at run time.
+@ i stack 0 0 Trusted image
+@ c box 1 0 Container
+@ h rack 2 0 Host
+@ a user 0 1 Attacker
+@ s shield 1 1 Limits
+= The risk | RISK
++ a c h
+~ !a>c exploit ;; !c>h escape
+A break-in to a root container with extra powers can become a break-in to the host.
+= Do not run as root
+Run as an ordinary numeric user and make the filesystem read-only, with a small temporary folder where the app must write.
++ s
+* c
+: c ok uid 10001
+$ docker run --user 10001:10001 --read-only --tmpfs /tmp shop
+= Drop powers
+~ s>c
+$ docker run --cap-drop ALL --security-opt no-new-privileges shop
+Add back only what is needed, for example `NET_BIND_SERVICE`.
+!! `--privileged` removes almost all protection.
+= Limit resources
+Without limits one container can use all memory or start endless processes and take the host down with it.
+* s
+$ docker run --memory 512m --cpus 1.5 --pids-limit 200 shop
+= Trust the image
++ i
+~ i>c verified
+Use official or verified publishers, pin digests, scan, verify signatures, keep an SBOM.
+= Rootless
+: h ok rootless
+Rootless mode runs the daemon itself without root. Then even an escape lands as an ordinary user.
+? What does --cap-drop ALL do? | Deletes the container | *Removes Linux capabilities | Drops the network

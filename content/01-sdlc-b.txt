@@ -1,0 +1,112 @@
+% sdlc | Software Lifecycles | #c8432b | How software gets planned, built and improved: lifecycle models, Agile, Scrum, Kanban, Jira, and where DevOps fits.
+
+## How a project runs
+# sdlc-phases | The software development life cycle | Beginner | Follow one idea from the client to production, person by person.
+@ client user 0 0 Client
+@ ba user 1 0 Business analyst
+@ req doc 2 0 Requirements
+@ des user 3 0 Designer
+@ dev team 3 1 Dev team
+@ qa user 2 1 Tester
+@ ops user 1 1 Operations
+@ prod rack 0 1 Production
+= The client explains | REQUIREMENTS
++ client ba
+" client I sell shoes. I want an online shop.
+" ba Who buys, and how do they pay?
+" client Anyone, by card or on delivery.
+Every project starts as a conversation. The client knows the **business**, not the software. The business analyst (BA) listens and asks.
+The **software development life cycle** (SDLC) is the set of activities that takes this talk to running software and keeps it healthy.
+! Most failed projects fail here: the team builds exactly what it misheard.
+= The BA writes it down | REQUIREMENTS
++ req
+w ba>req write
+" ba Is this what you meant?
+" client Yes, and add refunds.
+w ba>req update
+: req ok signed off
+The BA turns the talk into requirements and reads them back until the client agrees.
+**Functional**: "a buyer can pay by card". **Non-functional**: "checkout answers within 500 ms".
+= Design | DESIGN
++ des
+~ req>des read
+" des Web app, API, database.
+Design chooses how. **High-level design** picks the big parts and how they talk. **Low-level design** details one part: tables, classes, error cases.
+= Handover to developers | BUILD
++ dev
+w des>dev design
+" dev What if the card is refused?
+" des Show the reason, keep the cart.
+The designer and BA walk the team through the work. Questions asked now cost minutes; the same questions after release cost days.
+Developers build in small, reviewed changes.
+= Developers pass it to testing | TEST
++ qa
+w dev>qa build 1
+" qa Refund fails for 0.00.
+w !qa>dev bug
+w dev>qa build 2
+: qa info checks every story
+Testers check the build against the requirements. A bug goes back with steps to repeat it; a fixed build returns. This loop runs many times.
+= Deploy | DEPLOY
++ ops prod
+w qa>ops approved
+~ ops>prod release
+: prod ok live
+Operations puts the tested version in front of users. Good teams automate this step so it is the same every time.
+= Operate and listen again | OPERATE
+" ops Monday peak: checkout is slow.
+w ops>ba report
+" client Can we add gift cards?
+* prod client ba
+Running software produces facts: errors, speed, what people use. Those facts and new wishes start the next turn. That is why it is called a **cycle**.
+The models in the next lessons use these same people and activities. They differ in order, batch size and how soon feedback arrives.
+? "Checkout must answer within 500 ms" is which kind of requirement? | Functional | *Non-functional | A design decision
+
+# sdlc-roles | Who does what on a project | Beginner | The people, what each hands over, and to whom.
+@ client user 0 0 Client
+@ pm user 1 0 Project manager
+@ ba user 2 0 Business analyst
+@ arch user 3 0 Designer
+@ dev team 3 1 Dev team
+@ qa user 2 1 Tester
+@ ops user 1 1 Operations
+@ sup user 0 1 Support
+= Client and project manager
++ client pm
+" client Budget is fixed, ready by June.
+" pm Then we agree the scope first.
+w pm>client plan
+The **client** owns the goal and the money. The **project manager** owns time, cost, risk and communication.
+= Business analyst
++ ba
+w client>ba needs
+" ba I turn needs into clear stories.
+The **BA** is the translator between business and team: interviews, process maps, requirements, acceptance criteria.
+= Architect and designer
++ arch
+w ba>arch stories
+" arch Two services and one database.
+Architects decide structure. UX designers decide how it feels to use. Both hand over drawings and reasons.
+= Developers
++ dev
+w arch>dev design
+" dev Frontend, API and data: split.
+Developers build, review each other's code and write unit tests. A tech lead guides the technical choices.
+= Testers
++ qa
+w dev>qa build
+w !qa>dev bug
+Testers (QA) look for what can go wrong: functions, limits, speed, security. They join **early**, when stories are written.
+= Operations
++ ops
+w qa>ops approved
+" ops Released at 10:00, watching.
+Operations, platform or SRE engineers run it: servers, pipelines, monitoring, backups.
+= Support closes the loop
++ sup
+w ops>sup release notes
+" sup Five users ask for dark mode.
+w sup>client feedback
+Support hears users first. In **DevOps** these handovers shrink: the same team builds, tests, releases and runs, with automation in between.
+! Every handover is a place where information gets lost. Fewer, smaller handovers make faster and safer teams.
+? Who turns business needs into acceptance criteria? | Tester | *Business analyst | Operations

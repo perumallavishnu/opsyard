@@ -1,0 +1,120 @@
+% terraform | Terraform and IaC | #5f3d99 | Why infrastructure as code exists, each part on its own, then state, modules, teams and drift.
+
+## Introduction
+# tf-intro | Why Terraform exists | Beginner | Clicks cannot be reviewed.
+@ e user 0 0 Engineer
+@ m user 1 0 Colleague
+@ t gear 1 1 Terraform
+@ c cloud 2 0 Cloud
+= Clicking | PROBLEM
++ e m c
+~ e>c 40 clicks
+" m Make the same for production?
+" e I do not remember them all.
+The first environment is clicked together. The second is different in small ways that show up as strange bugs.
+= Many clouds, many tools | PROBLEM
+* e c
+: c warn three consoles
+AWS, GitHub, DNS and monitoring each have their own console and scripts.
+= Infrastructure as text | SOLUTION
++ t
+w e>t files
+" m I reviewed it: port 22 is open!
+~ t>c plan, apply
+: c ok as written
+You write what you want. Terraform shows a **plan**, you review it, it makes it so, and remembers what it made.
+= How it helps
+| Need | Terraform |
+| Same again | Run the same files |
+| Review | Pull request with plan |
+| Remove | destroy, nothing forgotten |
+| Many providers | One language |
+| Who and when | Git history |
+= Be careful | RISK
+~ !t>c destroy
+" m Read the plan first!
+It is powerful in both directions. Read each plan, protect important resources, keep state safe.
+? What do you read before applying? | The news | *The plan | The invoice
+^ https://developer.hashicorp.com/terraform/intro What is Terraform
+
+# tf-history | A short history of IaC | Beginner | From scripts to OpenTofu.
+@h 2006 Cloud APIs ; 2011 CloudFormation ; 2014 Terraform ; 2021 Version 1.0 ; 2023 OpenTofu ; 2025 IBM
+= 2006 | HISTORY
+EC2 and S3 give servers an API: infrastructure can be programmed.
+= 2011 | HISTORY
+AWS **CloudFormation**: templates for AWS.
+= 2014 | HISTORY
+HashiCorp releases **Terraform** for many providers.
+= 2021 | HISTORY
+Version 1.0 with a promise of compatibility.
+= 2023 | HISTORY
+HashiCorp moves to the Business Source License. The community forks **OpenTofu** under the Linux Foundation.
+= 2025 | HISTORY
+IBM completes its purchase of HashiCorp.
+? OpenTofu is... | a cloud | *an open source fork of Terraform | a language
+
+## Parts of Terraform
+# c-prov | Provider | Beginner | The translator to each service.
+@@ doc Your files ; gear Provider ; cloud Service API ; bucket Registry
+= Without it | PROBLEM
+You would write different API code for every service.
+= What it is | SOLUTION
+A plugin that knows one service: aws, azurerm, google, kubernetes, github.
+= How it works
+> terraform {
+>   required_providers { aws = { source = "hashicorp/aws", version = "~> 6.0" } }
+> }
+`terraform init` downloads it.
+= Real-time example | PRACTICE
+One project makes the AWS network, the GitHub repository and the DNS record together.
+? init downloads... | state | *providers | servers
+
+# c-res | Resource and data source | Beginner | Things to make, and things to look up.
+@@ user Engineer ; box Resource ; cloud Cloud ; card Data source
+= Without it | PROBLEM
+A wiki page says which servers should exist. It is wrong.
+= What it is | SOLUTION
+A **resource** block describes one thing to manage. A **data** block reads something that exists.
+= How it works
+> resource "aws_s3_bucket" "docs" { bucket = "acme-docs" }
+Others refer to it as `aws_s3_bucket.docs.id`, and Terraform works out the order.
+= Real-time example | PRACTICE
+A `data` block finds the newest system image, so new servers always start patched.
+? data blocks... | create | *read | delete
+
+# c-var | Variable, output, local | Beginner | Making files reusable.
+@@ user Engineer ; card Variables ; folder Files ; doc Outputs
+= Without them | PROBLEM
+Two copies of everything: one with "test", one with "prod".
+= What they are | SOLUTION
+**Variables** are inputs, **outputs** are results, **locals** are named values inside.
+= How it works
+Values come from a file, the command line, the environment or a default. Types and validation catch mistakes early.
+$ terraform apply -var-file=prod.tfvars
+= Real-time example | PRACTICE
+One set of files, three var files: small servers in test, large in production.
+? Results are given by... | variables | *outputs | providers
+
+# c-state | State | Beginner | Terraform's memory.
+@@ gear Terraform ; db State ; cloud Real things ; key Lock
+= Without it | PROBLEM
+Terraform would not know which server is yours, and would make a second one.
+= What it is | SOLUTION
+A file that links each block to the real resource.
+= How it works
+Keep it in shared, encrypted storage with **locking**, so two people cannot apply at once.
+= Real-time example | PRACTICE
+A laptop with the only state file was lost. The team had to import 60 resources one by one. Since then: remote state.
+? Where should team state live? | On a laptop | *In a locked remote backend | In chat
+
+# c-mod | Module | Intermediate | A building block you reuse.
+@@ user Team ; box Module ; cloud Networks ; bucket Registry
+= Without it | PROBLEM
+Eight teams each invent a network, eight different mistakes.
+= What it is | SOLUTION
+A folder of files with inputs and outputs, used like a function.
+= How it works
+Give it a version; teams upgrade when ready.
+= Real-time example | PRACTICE
+The platform team's network module has logging and private subnets built in. A fix reaches all teams with one version change.
+? Modules are for... | secrets | *reuse | logs

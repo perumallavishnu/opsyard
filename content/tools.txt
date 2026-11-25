@@ -1,0 +1,272 @@
+# curl | Ubuntu, Kali | curl | Network | s
+purpose: Sends HTTP and other requests from the terminal and shows exactly what comes back.
+where: Testing APIs, health checks in scripts, finding out why a site fails.
+$ curl -v https://example.com # request, response and TLS details
+$ curl -fsS https://example.com/health # quiet, non-zero exit on HTTP errors
+$ curl -o f.tgz -L https://example.com/f.tgz # save, following redirects
+risks: Tokens on the command line stay in shell history. Piping a download into a shell runs code you have not read.
+guide: Keep secrets in a file or variable. Verify checksums of downloads.
+src: https://curl.se/docs/manpage.html
+
+# jq | Ubuntu, Kali | jq | Text and data | s
+purpose: Reads, filters and reshapes JSON.
+where: Processing output of cloud CLIs, APIs and kubectl.
+$ jq . data.json # pretty print
+$ jq -r '.items[].name' data.json # one field per line
+$ jq '.users | length' data.json # count
+risks: Little risk. A wrong filter can give empty output that a script treats as success.
+guide: Use `jq -e` in scripts so missing values fail.
+src: https://jqlang.org/manual/
+
+# tmux | Ubuntu, Kali | tmux | Shell | s
+purpose: Keeps terminal sessions alive after you disconnect, and splits the screen.
+where: Long tasks over SSH, pairing on a server.
+$ tmux new -s work # new named session
+$ tmux attach -t work # return to it
+$ tmux ls # list
+risks: Anyone with your account can attach to the session.
+guide: Detach with Ctrl-b d. Close sessions that hold elevated rights.
+src: https://github.com/tmux/tmux/wiki
+
+# htop | Ubuntu, Kali | htop | Monitoring | s
+purpose: Interactive view of processes, CPU and memory.
+where: Finding what is using a server right now.
+$ htop # F6 sorts, F5 tree, F9 sends a signal
+$ htop -u www-data # one user
+risks: Killing the wrong process causes an outage.
+guide: Read the full command line before sending a signal.
+src: https://htop.dev/
+
+# strace | Ubuntu, Kali | strace | Debugging | c
+purpose: Shows the system calls a program makes.
+where: When a program fails with no useful message: missing file, refused connection.
+$ strace -f -e trace=file ./app # file access, including children
+$ sudo strace -p 1234 -c # summary of a running process
+risks: Slows the process a lot. Output can include passwords.
+guide: Use briefly in production. Protect the output.
+src: https://strace.io/
+
+# lsof | Ubuntu, Kali | lsof | Debugging | s
+purpose: Lists open files and sockets and who holds them.
+where: "Port already in use", or disk space not freed after deleting a log.
+$ sudo lsof -i :8080 # who uses this port
+$ sudo lsof +L1 # deleted files still open
+risks: Shows other users' activity when run as root.
+guide: Filter narrowly; a full listing is slow.
+src: https://github.com/lsof-org/lsof
+
+# tcpdump | Ubuntu, Kali | tcpdump | Network | c
+purpose: Captures packets on an interface.
+where: Proving whether traffic arrives, and in what form.
+$ sudo tcpdump -ni any port 5432 -c 50 # fifty packets on one port
+$ sudo tcpdump -ni eth0 -w cap.pcap # save for Wireshark
+risks: Captures may contain personal data and credentials.
+guide: Capture only systems you are allowed to. Filter narrowly, store safely, delete after.
+src: https://www.tcpdump.org/manpages/tcpdump.1.html
+
+# wireshark | Ubuntu, Kali | wireshark | Network | c
+purpose: Graphical packet analysis with protocol decoding.
+where: Understanding handshakes, retransmissions and protocol errors.
+$ wireshark cap.pcap # open a capture
+$ tshark -r cap.pcap -Y "tcp.analysis.retransmission" # terminal version, filtered
+risks: Same privacy risk as tcpdump.
+guide: Capture with tcpdump, analyse on your machine as a normal user.
+src: https://www.wireshark.org/docs/
+
+# mtr | Ubuntu, Kali | mtr-tiny | Network | s
+purpose: Combines ping and traceroute, showing loss per hop.
+where: Slow or lossy connections.
+$ mtr -rwc 50 example.com # report after 50 rounds
+$ mtr -T -P 443 example.com # with TCP to 443
+risks: Some routers answer slowly on purpose, which looks like loss.
+guide: Loss that continues to the last hop is real; loss at one middle hop usually is not.
+src: https://www.bitwizard.nl/mtr/
+
+# iperf3 | Ubuntu, Kali | iperf3 | Network | c
+purpose: Measures network throughput between two machines you control.
+where: Checking links between servers or zones.
+$ iperf3 -s # on the first
+$ iperf3 -c server1 -t 10 # on the second
+risks: Fills the link and can disturb others; cloud transfer may cost money.
+guide: Run in agreed windows and stop the server afterwards.
+src: https://iperf.fr/
+
+# ufw | Ubuntu, Kali | ufw | Firewall | c
+purpose: Simple front end to the Linux firewall.
+where: Single servers that need a few clear rules.
+$ sudo ufw allow OpenSSH # do this first
+$ sudo ufw enable # turn on
+$ sudo ufw status verbose # show rules
+risks: Enabling without allowing SSH locks you out. Docker's published ports can bypass ufw.
+guide: Allow SSH before enabling. Keep a console open while testing.
+src: https://help.ubuntu.com/community/UFW
+
+# fail2ban | Ubuntu, Kali | fail2ban | Defence | c
+purpose: Bans addresses that fail login too often.
+where: Servers with SSH or web login open to the internet.
+$ sudo fail2ban-client status sshd # show bans
+$ sudo fail2ban-client set sshd unbanip 203.0.113.9 # unban
+risks: You may ban yourself or an office behind one address.
+guide: Set ignoreip for trusted addresses. Still use key-only SSH.
+src: https://github.com/fail2ban/fail2ban
+
+# lynis | Ubuntu, Kali | lynis | Auditing | s
+purpose: Audits a Linux system and suggests hardening.
+where: Baseline checks on your own servers.
+$ sudo lynis audit system # full audit
+$ sudo lynis show details TEST-ID # explain one finding
+risks: Read-only, but the report describes your weaknesses.
+guide: Fix in order of risk, rerun, protect reports.
+src: https://www.kali.org/tools/lynis/
+
+# auditd | Ubuntu, Kali | auditd | Auditing | c
+purpose: Kernel-level record of chosen events.
+where: Compliance and incident investigation.
+$ sudo auditctl -w /etc/passwd -p wa -k identity # watch a file
+$ sudo ausearch -k identity # search records
+risks: Too many rules slow the system and fill disks.
+guide: Start from a known ruleset and ship logs elsewhere.
+src: https://github.com/linux-audit/audit-userspace
+
+# aide | Ubuntu, Kali | aide | Defence | c
+purpose: Detects changed files by comparing checksums.
+where: Servers whose system files should rarely change.
+$ sudo aideinit # build the baseline
+$ sudo aide --check --config /etc/aide/aide.conf # compare
+risks: A baseline made after a break-in hides it. Updates cause noise.
+guide: Build on a clean system, store the baseline off the host, refresh after updates.
+src: https://aide.github.io/
+
+# trivy | Ubuntu, Kali | | Container security | s
+purpose: Scans images, files, IaC and clusters for vulnerabilities, secrets and misconfiguration.
+where: CI pipelines and registries. Install from the vendor's repository.
+$ trivy image nginx:latest # scan an image
+$ trivy fs --scanners vuln,secret . # scan a folder
+$ trivy image --severity HIGH,CRITICAL --exit-code 1 app:1 # fail the pipeline
+risks: A vulnerability listed is not always reachable. Scanners themselves are supply chain targets.
+guide: Pin the scanner by version or digest. Triage by exploitability.
+src: https://trivy.dev/
+
+# nmap | Ubuntu, Kali | nmap | Discovery | c
+purpose: Finds hosts, open ports and service versions.
+where: Inventory, checking firewall rules, authorised security tests.
+$ nmap -sV -p 22,80,443 10.0.0.5 # versions on chosen ports
+$ nmap -sn 10.0.0.0/24 # which hosts are up
+$ nmap scanme.nmap.org # a host that permits light test scans
+risks: Scanning without permission may be illegal and triggers alarms. Aggressive scans can upset fragile devices.
+guide: Get written permission with scope and times. Start slow (-T2, few ports).
+src: https://www.kali.org/tools/nmap/
+
+# nikto | Kali | nikto | Web testing | c
+purpose: Checks web servers for outdated software and risky files.
+where: Quick look at your own test site.
+$ nikto -h http://localhost:8080 # scan a local app
+risks: Very noisy, many requests, false positives.
+guide: Only with permission, not at busy hours. Confirm findings by hand.
+src: https://www.kali.org/tools/nikto/
+
+# zaproxy | Kali | zaproxy | Web testing | c
+purpose: OWASP-origin web security scanner and intercepting proxy.
+where: DAST in CI and manual testing of your own apps.
+$ zaproxy # start the desktop app
+$ zap-baseline.py -t http://localhost:8080 # passive scan, in the ZAP Docker image
+risks: Active scans submit forms and can change or delete data.
+guide: Passive in shared environments; active only in disposable ones.
+src: https://www.zaproxy.org/docs/
+
+# burpsuite | Kali | burpsuite | Web testing | c
+purpose: Intercepts and edits browser traffic for manual testing.
+where: Authorised testing of login, access control and APIs.
+$ burpsuite # set the browser proxy to 127.0.0.1:8080
+risks: Its certificate lets it read all browser HTTPS traffic.
+guide: Use a separate browser profile, set scope, remove the certificate afterwards.
+src: https://www.kali.org/tools/burpsuite/
+
+# sqlmap | Kali | sqlmap | Web testing | d
+purpose: Tests whether a parameter is open to SQL injection.
+where: Training apps such as DVWA, and authorised tests.
+$ sqlmap -u "http://localhost:8080/item?id=1" --batch # test a local lab
+$ sqlmap -hh # all options
+risks: Can read or alter databases and load servers heavily. Illegal without permission.
+guide: Lab or written permission only. Fix with parameterised queries and least-privilege database users.
+src: https://www.kali.org/tools/sqlmap/
+
+# hydra | Kali | hydra | Credential testing | d
+purpose: Tests whether a login accepts weak passwords.
+where: Authorised audits of your own services with test accounts.
+$ hydra -h # options and supported protocols
+$ hydra -l testuser -P small.txt -t 2 ssh://127.0.0.1 # local lab, two tasks
+risks: Locks accounts, floods logs, and is illegal on systems you may not test.
+guide: Written permission, low rate, test accounts. Defend with MFA, lockout and key-only SSH.
+src: https://www.kali.org/tools/hydra/
+
+# john | Kali | john | Credential testing | d
+purpose: Checks the strength of password hashes offline.
+where: Auditing your own organisation's password policy.
+$ john --test # benchmark
+$ john --wordlist=words.txt hashes.txt # audit hashes you own
+risks: Hash files are highly sensitive, and so are results.
+guide: Permission, isolated machine, delete afterwards. Store passwords with Argon2id or scrypt.
+src: https://www.kali.org/tools/john/
+
+# metasploit-framework | Kali | metasploit-framework | Exploitation | d
+purpose: Framework for verifying whether a vulnerability is really exploitable.
+where: Professional penetration tests and isolated labs such as Metasploitable.
+$ msfconsole # start
+$ msfconsole -q -x "search type:auxiliary ssh_version; exit" # look up a module
+risks: Exploits can crash systems or give access. Illegal without permission.
+guide: Written scope, isolated lab network, remove anything you placed, report privately.
+src: https://docs.metasploit.com/
+
+# aircrack-ng | Kali | aircrack-ng | Wireless | d
+purpose: Set of tools to assess Wi-Fi security.
+where: Testing a wireless network you own.
+$ airmon-ng # show wireless interfaces
+$ aircrack-ng --help # options
+risks: Interfering with others' networks is illegal; monitor mode can drop your connection.
+guide: Only your own network in a controlled place. Defend with WPA3 or long WPA2 passphrases.
+src: https://www.kali.org/tools/aircrack-ng/
+
+# gitleaks | Ubuntu, Kali | | Secrets | s
+purpose: Finds secrets in files and Git history.
+where: Pre-commit hooks and CI. Available in Kali; on Ubuntu use the release binary.
+$ gitleaks git . # scan history
+$ gitleaks dir . # scan files
+risks: Reports contain the secrets unless redacted.
+guide: Use `--redact`. Revoke anything found; deleting it is not enough.
+src: https://github.com/gitleaks/gitleaks
+
+# shellcheck | Ubuntu, Kali | shellcheck | Shell | s
+purpose: Finds bugs in shell scripts.
+where: Editor and CI.
+$ shellcheck deploy.sh # check one
+$ shellcheck -S warning *.sh # warnings and above
+risks: None; it only reads.
+guide: Fix rather than silence. Explain each disable comment.
+src: https://www.shellcheck.net/
+
+# hadolint | Ubuntu, Kali | | Container security | s
+purpose: Lints Dockerfiles.
+where: Editor and CI. Download the release binary.
+$ hadolint Dockerfile # check
+risks: None; it only reads.
+guide: Pin base images and combine it with an image scanner.
+src: https://github.com/hadolint/hadolint
+
+# ab | Ubuntu, Kali | apache2-utils | Load testing | c
+purpose: Sends many HTTP requests and reports speed.
+where: Quick check on your own test server.
+$ ab -n 500 -c 10 http://localhost:8080/ # 500 requests, 10 at once
+risks: Load against someone else's server is an attack. Can also overload yours.
+guide: Own systems only, outside production, raise slowly. Use k6 for realistic scenarios.
+src: https://httpd.apache.org/docs/current/programs/ab.html
+
+# openssl | Ubuntu, Kali | openssl | Cryptography | c
+purpose: Works with certificates, keys and TLS connections.
+where: Checking expiry, testing TLS, creating test certificates.
+$ openssl s_client -connect example.com:443 -servername example.com # inspect a server
+$ openssl x509 -in cert.pem -noout -dates # expiry
+$ openssl rand -base64 32 # random secret
+risks: Private keys left readable. Self-signed certificates used in production.
+guide: chmod 600 for keys; use ACME for real certificates.
+src: https://docs.openssl.org/

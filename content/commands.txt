@@ -1,0 +1,301 @@
+% git | Git
+@ w folder 0 0 Working tree
+@ s layer 1 0 Staging
+@ r db 2 0 Local repo
+@ o cloud 3 0 Remote
+@ t bucket 1 1 Stash
+git init | Create a new repository in this folder. | c | w>r .git | -b main = name of the first branch ;; --bare = no working tree, for servers | Creates only a hidden .git folder.
+git clone <url> | Copy a whole repository with history. | c | o>r history ;; r>w files | --depth 1 = only the latest commit ;; --filter=blob:none = fetch contents when needed ;; -b <branch> = check out this branch | Shallow clones suit CI, not daily work.
+git config --global user.name "Ana" | Set who you are on commits. | c | w>r | --global = for your account ;; --local = this repository ;; --list = show settings
+git status | Show changed, staged and untracked files. | s | w>s compare ;; s>r compare | -s = short form ;; -b = show branch
+git add <path> | Put changes in the staging area. | c | w>s add | -p = choose parts ;; -A = everything, including deletions ;; -u = only tracked files
+git rm <path> | Delete a file and stage the deletion. | c | w>s delete | --cached = stop tracking, keep the file
+git mv <old> <new> | Rename a file and stage it. | c | w>s rename
+git commit -m "msg" | Save the staged snapshot. | c | s>r commit | -a = stage tracked changes first ;; --amend = replace the last commit ;; -S = sign ;; --fixup=<commit> = mark for autosquash | Amend only commits you have not pushed.
+git diff | Compare working tree and staging. | s | w>s | --staged = staging vs last commit ;; main...feature = changes on feature since it split ;; --stat = summary
+git log | Show history. | s | r>w | --oneline --graph --all = compact picture ;; -p = with changes ;; -S"text" = commits that added or removed text ;; --since="2 weeks" = only this recent
+git show <commit> | Show one commit and its changes. | s | r>w | --stat = files only ;; <commit>:<file> = a file as it was then
+git blame <file> | Show who last changed each line. | s | r>w | -L 10,20 = only these lines ;; -w = ignore whitespace
+git branch | List, create or delete branches. | c | r>r | -a = include remote ;; -d <name> = delete if merged ;; -D <name> = delete anyway ;; -m <new> = rename | -D can drop unmerged work; the reflog can still find it.
+git switch <branch> | Change branch. | c | r>w files | -c <name> = create and switch ;; --detach = look at a commit ;; - = previous branch
+git restore <path> | Throw away unstaged edits in a file. | d | s>w overwrite | --staged = unstage, keep edits ;; --source=<commit> = take the version from there | Unstaged edits are not recoverable from Git.
+git merge <branch> | Combine another branch into this one. | c | r>r ;; r>w | --no-ff = always a merge commit ;; --squash = one staged change ;; --abort = give up on conflict
+git rebase <base> | Replay your commits on another base. | c | r>r replay | -i = edit the list ;; --onto = move to another base ;; --autosquash = apply fixups ;; --abort / --continue = give up, or go on after fixing a conflict | Do not rebase commits others use.
+git cherry-pick <commit> | Copy one commit to this branch. | c | r>r copy | -x = note the origin ;; -n = do not commit
+git revert <commit> | Add a commit that undoes another. | c | r>r opposite | -m 1 = for merge commits ;; -n = do not commit yet | Safe on shared branches.
+git reset <commit> | Move the branch to another commit. | d | r>s ;; s>w | --soft = keep staged ;; --mixed = keep unstaged (default) ;; --hard = discard changes | --hard destroys uncommitted work.
+git stash push | Shelve uncommitted changes. | c | w>t shelve | -m "note" = label ;; -u = include untracked
+git stash pop | Bring shelved changes back. | c | t>w | apply = bring back and keep the stash ;; list = show all
+git remote -v | Show remotes. | s | r>o | add <name> <url> = add ;; set-url = change
+git fetch | Download new commits without changing files. | s | o>r | --all = every remote ;; --prune = drop labels of deleted branches
+git pull | Fetch and integrate. | c | o>r ;; r>w | --rebase = replay yours on top ;; --ff-only = refuse if diverged
+git push | Upload commits. | c | r>o | -u origin <branch> = set upstream ;; --tags = send tags ;; --force-with-lease = overwrite only if unchanged ;; --delete <branch> = remove | Avoid plain --force.
+git tag -a v1.0 -m "..." | Mark a release. | c | r>r v1.0 | -d = delete ;; -l "v1.*" = list
+git reflog | Show where HEAD has been. | s | r>w |  | Your safety net after a bad reset or rebase.
+git bisect start | Find the commit that broke something. | c | r>w test | good / bad = judge ;; run <script> = automatic ;; reset = end
+git clean -n | Show which untracked files would be deleted. | s | w>w | -fd = really delete files and folders ;; -x = ignored files too | Always run -n first.
+git worktree add <path> <branch> | Second working folder. | c | r>w | list = show all ;; remove <path> = remove one
+git submodule update --init | Fetch pinned sub-repositories. | c | o>w | --recursive = nested ones too
+git gc | Compress and tidy the repository. | c | r>r | --prune=now = delete unreachable objects at once
+git fsck | Check the object database. | s | r>r | --lost-found = list dangling objects
+
+% gh | GitHub CLI
+@ c laptop 0 0 Terminal
+@ g cloud 1 0 GitHub
+@ p board 2 0 Pull request
+@ a gear 2 1 Actions
+@ i card 1 1 Issues
+gh auth login | Sign in. | c | c>g | --scopes = ask for extra permissions
+gh repo create <name> | Create a repository. | c | c>g | --private = visible only to people you choose ;; --source=. --push = from this folder
+gh repo clone <owner/repo> | Clone. | c | g>c
+gh pr create --fill | Open a pull request from this branch. | c | c>g ;; g>p | --draft = mark as draft ;; --reviewer <name> = ask for review ;; --base <branch> = merge into this branch
+gh pr checkout <number> | Get a pull request locally. | c | p>g ;; g>c
+gh pr review <number> --approve | Review. | c | c>g ;; g>p | --request-changes -b "why" = block with a reason ;; --comment = comment only
+gh pr merge <number> --squash | Merge. | c | p>g | --rebase = replay without a merge commit ;; --merge = make a merge commit ;; --auto = when checks pass ;; --delete-branch = delete it afterwards
+gh pr checks | Show check results. | s | a>p ;; p>g | --watch = update until finished
+gh issue create | Open an issue. | c | c>g ;; g>i | --label = add a label ;; --assignee = who works on it
+gh run list | List workflow runs. | s | a>g ;; g>c
+gh run view <id> --log-failed | Read failing logs. | s | a>g ;; g>c
+gh workflow run <file> | Start a workflow. | c | c>g ;; g>a | -f key=value = inputs
+gh release create v1.0 | Publish a release. | c | c>g | --generate-notes = write notes from merged pull requests ;; --draft = mark as draft
+gh secret set NAME | Store an Actions secret. | c | c>g ;; g>a | --env production = only for this environment
+gh api <path> | Call any API endpoint. | c | c>g ;; g>c | -X POST = method ;; --jq = filter
+
+% linux | Linux
+@ sh laptop 0 0 Shell
+@ f folder 1 0 Files
+@ p gear 2 0 Processes
+@ s server 2 1 Services
+@ n cloud 1 1 Network
+@ d db 0 1 Disk
+pwd | Show the current directory. | s | sh>f
+ls -la | List files with details and hidden ones. | s | sh>f | -h = readable sizes ;; -t = newest first
+cd <dir> | Change directory. | s | sh>f | - = previous ;; ~ = home
+cat <file> | Print a file. | s | f>sh
+less <file> | Read page by page. | s | f>sh | / = search ;; q = quit
+head -n 20 <file> | First lines. | s | f>sh
+tail -f <file> | Follow a growing file. | s | f>sh | -n 100 = start from last 100 ;; -F = survive rotation
+cp -a <src> <dst> | Copy, keeping attributes. | c | f>f
+mv <src> <dst> | Move or rename. | c | f>f | -n = do not overwrite
+rm <file> | Delete. No recycle bin. | d | sh>f | -r = folders ;; -i = ask ;; -f = never ask | Check the path with ls first.
+mkdir -p a/b/c | Create nested folders. | c | sh>f
+ln -s <target> <link> | Symbolic link. | c | f>f
+find . -name "*.log" | Find files. | s | sh>f | -mtime +7 = older than 7 days ;; -size +100M = larger than 100 MB ;; -delete = delete the matches | Run without -delete first.
+grep -rn "text" . | Search in files. | s | f>sh | -i = ignore case ;; -v = not matching ;; -E = extended patterns
+sed -i.bak 's/old/new/g' <file> | Replace text, keep a backup. | c | f>f |  | Without -i it only prints.
+awk '{print $1}' <file> | Print columns. | s | f>sh | -F: = field separator
+sort <file> | Sort lines. | s | f>sh | -n = numeric ;; -r = reverse ;; -u = unique
+xargs -n1 <cmd> | Turn input into arguments. | c | sh>p | -0 = safe with odd names ;; -P4 = four at a time
+chmod 640 <file> | Change permissions. | c | sh>f | u+x = add execute for owner ;; -R = recursive
+chown user:group <file> | Change owner. | c | sh>f | -R = recursive
+sudo <cmd> | Run as root. | c | sh>p | -u <user> = as someone else ;; -l = what may I run
+ps aux | List processes. | s | p>sh
+top | Live view. | s | p>sh | M = by memory ;; P = by CPU
+kill <pid> | Ask a process to stop. | c | sh>p TERM | -9 = force
+nohup <cmd> & | Keep running after logout. | c | sh>p
+systemctl status <svc> | State of a service. | s | s>sh | restart = stop and start ;; enable --now = start now and at boot ;; daemon-reload = after editing units
+journalctl -u <svc> -f | Follow a service's log. | s | s>sh | -p err = errors ;; --since "1 hour ago" = only this recent
+crontab -e | Edit scheduled jobs. | c | sh>p | -l = list ;; -r = remove all
+df -h | Free space. | s | d>sh | -i = inodes
+du -sh * | Size of each item. | s | f>sh
+lsblk | Disks and partitions. | s | d>sh
+mount <dev> <dir> | Attach a filesystem. | c | d>f
+free -h | Memory. | s | p>sh
+tar czf out.tgz <dir> | Make an archive. | c | f>f | xzf = extract ;; tzf = list
+ip addr | Addresses. | s | n>sh | ip route = routes
+ss -tlnp | Listening ports. | s | n>sh | -u = UDP
+ping -c 3 <host> | Reachability. | s | sh>n
+dig <name> | DNS lookup. | s | sh>n ;; n>sh | +short = answer only ;; +trace = from the root
+curl -v <url> | HTTP request with details. | s | sh>n ;; n>sh | -I = headers ;; -X POST -d = send ;; -L = follow redirects
+ssh user@host | Remote shell. | c | sh>n | -i key = private key to use ;; -L 8080:localhost:80 = tunnel ;; -J jump = through another host
+scp <file> user@host: | Copy over SSH. | c | f>n
+rsync -av src/ host:dst/ | Copy only differences. | c | f>n | --dry-run = preview ;; --delete = remove extras at the target | Use --dry-run before --delete.
+apt update && apt upgrade | Update packages. | c | n>f | install = add packages ;; remove = delete packages ;; list --installed = what is installed
+useradd -m <name> | Create a user. | c | sh>f | usermod -aG <group> <name> = add to a group
+dd if=<src> of=<dst> | Raw copy. | d | d>d | bs=4M = block size ;; status=progress = show progress | A wrong of= erases a disk.
+
+% docker | Docker
+@ c laptop 0 0 CLI
+@ d gear 1 0 Daemon
+@ i stack 2 0 Images
+@ b box 3 0 Containers
+@ r cloud 1 1 Registry
+@ v db 3 1 Volumes
+@ n router 2 1 Networks
+docker version | Client and server versions. | s | c>d
+docker info | Daemon details. | s | d>c
+docker pull <image> | Download an image. | c | r>d ;; d>i | --platform linux/arm64 = choose the CPU type
+docker images | List images. | s | i>d ;; d>c
+docker build -t name:tag . | Build from a Dockerfile. | c | c>d ;; d>i | -f <file> = another Dockerfile ;; --no-cache = ignore cached layers ;; --build-arg K=V = value for an ARG; not for secrets ;; --target <stage> = stop at this stage ;; --secret id=x,src=f = secret mounted only during the build
+docker tag <img> <new> | Another name for an image. | c | i>i
+docker push <image> | Upload. | c | i>d ;; d>r
+docker login | Sign in to a registry. | c | c>r | --password-stdin = safer in scripts
+docker run <image> | Create and start a container. | c | c>d ;; d>i ;; i>b | -d = background ;; -it = interactive ;; --rm = remove on exit ;; -p 8080:80 = publish ;; -v vol:/data = mount a volume at this path ;; -e K=V = environment variable ;; --network = join this network ;; --memory 512m = memory limit ;; --restart unless-stopped = restart after crash or reboot
+docker ps -a | List containers. | s | b>d ;; d>c
+docker logs -f <c> | Read logs. | s | b>d ;; d>c | --tail 100 = only the last 100 lines ;; --since 10m = only the last 10 minutes
+docker exec -it <c> sh | Run inside. | c | c>d ;; d>b
+docker inspect <x> | Full JSON detail. | s | b>d ;; d>c | -f '{{.State.ExitCode}}' = print one field
+docker stats | Live CPU and memory. | s | b>d ;; d>c
+docker top <c> | Processes inside. | s | b>d
+docker cp <c>:/path . | Copy files out or in. | c | b>c
+docker diff <c> | Changed files in a container. | s | b>d
+docker stop <c> | Graceful stop. | c | d>b TERM | -t 30 = wait longer
+docker kill <c> | Immediate stop. | c | d>b KILL
+docker rm <c> | Remove a container. | d | d>b | -f = even if running ;; -v = anonymous volumes too
+docker rmi <img> | Remove an image. | d | d>i
+docker volume create <v> | Create a volume. | c | d>v | ls = list ;; inspect = details ;; rm = delete
+docker network create <n> | Create a network. | c | d>n | ls = list ;; inspect = details ;; connect = attach a running container
+docker history <img> | Layers of an image. | s | i>d
+docker save -o f.tar <img> | Export an image. | c | i>c | load -i = import
+docker system df | Disk use. | s | d>c
+docker system prune | Remove unused things. | d | d>b ;; d>i | -a = all unused images ;; --volumes = anonymous volumes too
+docker buildx build --platform a,b . | Build for several platforms. | c | c>d ;; d>i | --push = send to the registry after building
+docker scout cves <img> | Known vulnerabilities. | s | i>c
+docker compose up -d | Start a project. | c | c>d ;; d>n ;; d>b | --build = rebuild images first ;; --scale web=3 = run three copies of web
+docker compose ps | State of a project. | s | b>c
+docker compose logs -f | Logs of a project. | s | b>c
+docker compose down | Stop and remove a project. | c | d>b | -v = delete volumes too | -v deletes your data.
+docker compose config | Show the final file. | s | c>d
+docker context use <n> | Switch Docker host. | c | c>d
+
+% kubectl | kubectl
+@ c laptop 0 0 kubectl
+@ a gear 1 0 API server
+@ e db 1 1 etcd
+@ d board 2 0 Deployment
+@ p pod 3 0 Pod
+@ s router 2 1 Service
+@ n server 3 1 Node
+kubectl config get-contexts | List clusters you can use. | s | c>c | use-context <n> = switch ;; set-context --current --namespace=x = set your default namespace | Check the context before any change.
+kubectl get pods | List objects. | s | c>a ;; a>c | -A = all namespaces ;; -o wide = more columns, such as node and IP ;; -o yaml = the full object ;; -w = watch ;; -l app=web = by label
+kubectl describe pod <p> | Details and events. | s | p>a ;; a>c
+kubectl apply -f <file> | Create or update from a file. | c | c>a ;; a>e ;; a>d | --server-side = merge on the server and track field owners ;; --dry-run=server = full check, nothing saved ;; -k <dir> = Kustomize
+kubectl diff -f <file> | Preview changes. | s | c>a
+kubectl create deployment web --image=nginx | Create quickly. | c | c>a ;; a>d | --dry-run=client -o yaml = make a file
+kubectl delete -f <file> | Delete objects. | d | c>a ;; a>d | --dry-run=server = preview | Deleting a namespace deletes everything inside.
+kubectl edit deploy <d> | Edit live. | c | c>a ;; a>d |  | Changes are lost on the next apply.
+kubectl explain pod.spec | Field documentation. | s | c>a | --recursive = show all nested fields
+kubectl logs <p> | Container logs. | s | p>a ;; a>c | -f = follow live ;; --previous = before the crash ;; -c <container> = which container ;; --all-containers = every container in the Pod
+kubectl exec -it <p> -- sh | Run inside. | c | c>a ;; a>p
+kubectl debug -it <p> --image=busybox | Add a debug container. | c | a>p | node/<n> = debug a node
+kubectl port-forward svc/web 8080:80 | Reach it locally. | s | c>a ;; a>s ;; s>p
+kubectl cp <p>:/path . | Copy files. | c | p>c
+kubectl set image deploy/web web=img:2 | Change the image. | c | c>a ;; a>d ;; d>p
+kubectl rollout status deploy/web | Watch an update. | s | d>a | history = past revisions ;; undo = go back one ;; restart = stop and start ;; pause = hold the rollout
+kubectl scale deploy/web --replicas=5 | Change the count. | c | c>a ;; a>d ;; d>p
+kubectl autoscale deploy/web --max=10 | Create an autoscaler. | c | c>a ;; a>d | --min = lowest number of Pods ;; --cpu=70% = target average CPU
+kubectl expose deploy/web --port=80 | Create a Service. | c | c>a ;; a>s ;; s>p | --type=LoadBalancer = ask for an external load balancer ;; --target-port = port inside the Pod
+kubectl top pods | CPU and memory. | s | p>a | nodes = usage per node
+kubectl get events | Recent events. | s | a>c | --sort-by=.lastTimestamp = oldest to newest
+kubectl label pod <p> env=dev | Set a label. | c | a>p | env- = remove
+kubectl annotate deploy <d> k=v | Set an annotation. | c | a>d
+kubectl create configmap <n> --from-file=f | Create a ConfigMap. | c | c>a ;; a>e | --from-literal=k=v = value given directly
+kubectl create secret generic <n> --from-file=f | Create a Secret. | c | c>a ;; a>e |  | Literals end up in shell history.
+kubectl auth can-i <verb> <res> | Check a permission. | s | c>a | --as <user> = check as someone else ;; --list = list everything
+kubectl cordon <node> | Stop new Pods there. | c | a>n | uncordon = allow
+kubectl drain <node> | Move Pods off. | d | a>n ;; n>p evict | --ignore-daemonsets = leave DaemonSet Pods ;; --delete-emptydir-data = allow loss of emptyDir data
+kubectl taint node <n> k=v:NoSchedule | Repel Pods. | c | a>n
+kubectl wait --for=condition=Ready pod/<p> | Wait for a state. | s | p>a | --timeout=60s = give up after this
+kubectl api-resources | All kinds. | s | a>c
+kubectl patch deploy <d> -p '{...}' | Change some fields. | c | a>d | --type=json = a list of exact operations
+helm install <rel> <chart> | Install a chart. | c | c>a ;; a>d | -f values.yaml = your values ;; --set k=v = override one value
+helm upgrade <rel> <chart> | Upgrade. | c | c>a ;; a>d | --install = create if missing
+helm rollback <rel> <rev> | Go back. | c | c>a ;; a>d
+helm template <chart> | Render locally. | s | c>c
+helm uninstall <rel> | Remove a release. | d | c>a ;; a>d
+
+% ansible | Ansible
+@ c laptop 0 0 Control node
+@ i doc 1 1 Inventory
+@ p card 1 0 Playbook
+@ h server 2 0 Hosts
+@ v key 0 1 Vault
+@ g cloud 2 1 Galaxy
+ansible all -m ping | Check connection. | s | c>i ;; c>p ;; p>h | -i <inventory> = which hosts ;; -u <user> = log in as ;; -b = become root
+ansible web -a "uptime" | Run one command. | c | c>p ;; p>h
+ansible-inventory --graph | Show groups. | s | i>c | --list = JSON
+ansible-playbook site.yml | Run a playbook. | c | c>p ;; i>c ;; p>h | --check = predict ;; --diff = show file changes ;; --limit web1 = only these hosts ;; --tags x = only tagged tasks ;; -e k=v = extra variable, highest priority ;; -f 20 = parallel
+ansible-playbook site.yml --syntax-check | Check syntax. | s | c>p
+ansible-playbook site.yml --list-hosts | Who is affected. | s | p>i
+ansible-doc <module> | Module help. | s | c>c | -l = list
+ansible-galaxy role init <n> | New role skeleton. | c | c>p
+ansible-galaxy collection install <c> | Install a collection. | c | g>c | -r requirements.yml = everything listed in a file
+ansible-vault encrypt <f> | Encrypt a file. | c | c>v | decrypt = turn back to plain text ;; edit = edit in place ;; view = read without saving plain text ;; rekey = new password
+ansible-config dump --only-changed | Changed settings. | s | c>c
+ansible-lint | Check style. | s | p>c
+ansible-pull -U <repo> | Host configures itself. | c | g>h
+
+% terraform | Terraform
+@ f doc 0 0 Config
+@ t gear 1 0 Terraform
+@ s db 1 1 State
+@ p card 2 0 Plan
+@ c cloud 3 0 Cloud
+@ r bucket 2 1 Registry
+terraform init | Prepare the folder. | c | r>t ;; t>s | -upgrade = newer providers ;; -migrate-state = move state to a new backend ;; -reconfigure = set up the backend again, ignoring the old one
+terraform fmt | Format files. | c | f>f | -check -recursive = report only, in all folders
+terraform validate | Check syntax and types. | s | f>t
+terraform plan | Preview. | s | f>t ;; s>t ;; t>p | -out=tfplan = save the plan ;; -var k=v = set a variable ;; -refresh-only = only drift ;; -detailed-exitcode = exit 2 when there are changes
+terraform apply | Make changes. | c | p>t ;; t>c ;; t>s | <planfile> = exactly that plan ;; -replace=<addr> = recreate one resource | Avoid -auto-approve by hand.
+terraform destroy | Remove everything managed. | d | t>c delete | -target=<addr> = only this resource; for emergencies
+terraform show | Show state or plan. | s | s>t | -json = machine-readable
+terraform output | Show outputs. | s | s>t | -raw <name> = one value without quotes
+terraform state list | List resources. | s | s>t | show <addr> = details of one ;; mv = rename in state ;; rm = forget without deleting
+terraform import <addr> <id> | Adopt an existing resource. | c | c>t ;; t>s |  | Import blocks in code are easier to review.
+terraform workspace list | Workspaces. | s | s>t | new = create ;; select = switch to
+terraform test | Run tests. | c | f>t ;; t>c
+terraform console | Try expressions. | s | t>t
+terraform graph | Dependency graph. | s | f>t
+terraform providers lock | Lock provider hashes. | c | r>t | -platform=linux_amd64 = for another platform
+terraform force-unlock <id> | Remove a stuck lock. | d | t>s |  | Only when sure nobody is applying.
+
+% aws | AWS CLI
+@ c laptop 0 0 CLI
+@ i key 1 0 IAM
+@ e server 2 0 EC2
+@ s bucket 2 1 S3
+@ k pod 3 0 EKS / ECS
+@ l gauge 3 1 CloudWatch
+@ z gear 1 1 Other
+aws configure sso | Set up sign-in. | c | c>i | aws sso login --profile x = sign in
+aws sts get-caller-identity | Who am I? | s | c>i ;; i>c |  | Run it before any change.
+aws ec2 describe-instances | List instances. | s | c>i ;; e>c | --filters = narrow on the server ;; --query = choose fields ;; --output table = readable table
+aws ec2 run-instances | Launch. | c | c>i ;; c>e | --image-id = the AMI ;; --instance-type = the size ;; --dry-run = check permission only
+aws ec2 stop-instances --instance-ids i-x | Stop. | c | c>e
+aws ec2 terminate-instances --instance-ids i-x | Delete. | d | c>e
+aws ssm start-session --target i-x | Shell without SSH. | c | c>e
+aws s3 ls | List buckets. | s | s>c
+aws s3 cp <f> s3://b/ | Upload. | c | c>s | --recursive = whole folders ;; --sse = server-side encryption
+aws s3 sync . s3://b | Copy differences. | c | c>s | --dryrun = preview ;; --delete = remove extras
+aws s3 rb s3://b --force | Delete a bucket and its objects. | d | c>s
+aws s3 presign s3://b/k | Temporary link. | c | s>c | --expires-in 3600 = valid for one hour
+aws iam list-users | Users. | s | i>c
+aws iam simulate-principal-policy | Test permissions. | s | c>i
+aws ecr get-login-password | Registry token for docker login. | c | c>z
+aws ecs update-service --force-new-deployment | Redeploy. | c | c>k
+aws eks update-kubeconfig --name x | Connect kubectl. | c | c>k
+aws lambda invoke --function-name f out.json | Call a function. | c | c>z
+aws logs tail <group> --follow | Follow logs. | s | l>c | --since 1h = only the last hour ;; --filter-pattern = only matching events
+aws cloudwatch describe-alarms | Alarms. | s | l>c | --state-value ALARM = only firing
+aws cloudformation deploy --template-file t.yml --stack-name s | Deploy a stack. | c | c>z
+aws secretsmanager get-secret-value --secret-id x | Read a secret. | s | z>c |  | Prints the secret in your terminal.
+aws ce get-cost-and-usage | Cost data. | s | z>c |  | Each request has a small charge.
+
+% jenkins | Jenkins CLI
+@ c laptop 0 0 CLI
+@ j gear 1 0 Controller
+@ a server 2 0 Agent
+@ o board 1 1 Jobs
+java -jar jenkins-cli.jar -s <url> -auth @file help | List commands. | s | c>j | -auth @file = user:token from a file
+... who-am-i | Check your login. | s | c>j
+... list-jobs | Jobs. | s | o>j ;; j>c
+... build <job> | Start a build. | c | c>j ;; j>a | -s = wait ;; -v = show log ;; -p K=V = parameter
+... console <job> | Read a log. | s | a>j ;; j>c
+... get-job <job> | Export as XML. | s | o>j ;; j>c
+... create-job <job> | Create from XML. | c | c>j ;; j>o
+... disable-job <job> | Disable. | c | j>o
+... delete-job <job> | Delete with its history. | d | j>o
+... install-plugin <id> | Install a plugin. | c | c>j | -deploy = without restart
+... safe-restart | Restart when builds finish. | c | c>j
+... offline-node <n> | Take an agent offline. | c | j>a | online-node = back
+... declarative-linter < Jenkinsfile | Check a Jenkinsfile. | s | c>j

@@ -1,0 +1,111 @@
+% jenkins | Jenkins | #a33a52 | Why an automation server exists, its parts one by one, then Jenkinsfiles, agents and care.
+
+## Introduction
+# jk-why | Why Jenkins exists | Beginner | One developer tired of breaking the build.
+@ d team 0 0 Dev team
+@ m user 1 0 Build manager
+@ j gear 1 1 Jenkins
+@ r box 2 0 Release
+= Builds by hand | PROBLEM
++ d m r
+w d>m code
+" m Wait, I am building another one.
+w !m>r by hand
+One person builds everyone's code by hand. Mistakes are found the next day, and that person is on holiday in August.
+= A server that never sleeps | SOLUTION
++ j
+~ d>j push ;; j>r build and test
+: j ok 4 min
+**Jenkins** watches the code and builds, tests and releases each change by itself.
+= Why so popular
+Free, runs anywhere, and has well over a thousand **plugins**: Git, Docker, Kubernetes, clouds, chat, test tools. It can automate nearly anything.
+= In maintenance
+* j
+Nightly tests, backups, certificate renewal, cleaning jobs. Many companies also use it as a simple operations robot.
+= The price | RISK
+: j warn needs care
+You run it: updates, plugins, security. Hosted CI has less work but less freedom.
+? Main reason for Jenkins' flexibility? | Its colour | *Plugins | It is paid
+^ https://www.jenkins.io/doc/ Jenkins documentation
+
+# jk-history | A short history of Jenkins | Beginner | From Hudson to Pipeline.
+@h 2004 Hudson ; 2008 Duke's Choice ; 2011 Jenkins ; 2016 Version 2 ; 2019 CD Foundation ; 2026 Java 21
+= 2004 | HISTORY
+Kohsuke Kawaguchi at Sun Microsystems starts **Hudson** as a hobby, so he would notice broken builds earlier.
+= 2008 | HISTORY
+Hudson wins a Duke's Choice Award at JavaOne.
+= 2011 | HISTORY
+After a dispute with Oracle over the name, the community renames its project **Jenkins**.
+= 2016 | HISTORY
+**Jenkins 2** makes Pipeline as code the normal way.
+= 2019 | HISTORY
+Jenkins joins the new Continuous Delivery Foundation.
+= 2026 | HISTORY
+LTS 2.555.1 requires Java 21 or 25.
+? Jenkins' first name was... | Travis | *Hudson | Bamboo
+
+## Parts of Jenkins
+# c-jkjob | Job and build | Beginner | What to do, and one time of doing it.
+@@ user Developer ; card Job ; server Agent ; doc Build #42
+= Without it | PROBLEM
+The steps live in someone's memory.
+= What it is | SOLUTION
+A **job** describes work. A **build** is one run of it with a number, a log and a result.
+= How it works
+Results: success, unstable (tests failed), failure, aborted. The **workspace** is the folder where it runs.
+= Real-time example | PRACTICE
+Build 41 was green, 42 is red. The difference between them is three commits, so the cause is easy to find.
+? One run of a job is a... | plugin | *build | node
+
+# c-jkplugin | Plugins | Beginner | Adding abilities.
+@@ user Admin ; box Plugin ; gear Jenkins ; cloud Other tools
+= Without them | PROBLEM
+Jenkins itself knows little: no Git, no Docker, no chat.
+= What they are | SOLUTION
+Small packages that add features: Git, Pipeline, Credentials, Kubernetes, JUnit.
+= How it works
+Install from the plugin manager, restart if needed, and read security advisories.
+= Real-time example | PRACTICE
+A team had 140 plugins and an update broke half. They now keep 35 and test updates on a copy first.
+? More plugins mean... | more speed | *more to maintain | no risk
+
+# c-jknode | Controller, node, executor | Beginner | Who plans and who works.
+@@ gear Controller ; queue Queue ; server Node ; card Executor
+= Without nodes | PROBLEM
+All builds on one machine: slow, and one project's tools break another's.
+= What they are | SOLUTION
+The **controller** plans, **nodes** (agents) work, an **executor** is one slot on a node.
+= How it works
+A job asks for a **label** such as `linux && docker`. The queue waits until a matching executor is free.
+= Real-time example | PRACTICE
+Four nodes with two executors run eight builds at once. A Mac node with the label `mac` builds the phone app.
+? A label is used to... | name a build | *choose a node | store a password
+
+# c-jkcred | Credentials and webhooks | Beginner | Keys kept safe, and instant starts.
+@@ cloud GitHub ; flag Webhook ; gear Jenkins ; key Credentials
+= Without them | PROBLEM
+Jenkins asks the code host every minute "anything new?", with a password written in the job.
+= What they are | SOLUTION
+A **webhook** is a message from the host at each push. **Credentials** are stored encrypted and used by ID.
+= How it works
+Push, webhook, matching job starts. The job borrows a credential only for the step that needs it.
+= Real-time example | PRACTICE
+Builds start two seconds after a push instead of up to five minutes later.
+? A webhook is sent by... | the tester | *the code host | the database
+
+# c-jkpipe | Pipeline words | Beginner | Pipeline, stage, step, agent, post.
+@@ doc Jenkinsfile ; gear Pipeline ; rack Server ; shield Stages
+= Without it | PROBLEM
+Clicking through forms: no history, no review, no copy.
+= What it is | SOLUTION
+A pipeline is text in a **Jenkinsfile** next to the code.
+= How it works
+| Word | Meaning |
+| agent | Where to run |
+| stage | A named part |
+| step | One action |
+| when | Condition |
+| post | What to do at the end |
+= Real-time example | PRACTICE
+The server dies. A new Jenkins reads the same Jenkinsfiles and works the same day.
+? Where should the Jenkinsfile live? | On a laptop | *In the code repository | In email

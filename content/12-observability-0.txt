@@ -1,0 +1,121 @@
+% observe | Observability and SRE | #28753f | Why systems must be observed, each signal on its own, then Prometheus, SLOs and incidents.
+
+## Introduction
+# ob-why | Why observability exists | Beginner | Customers should not be your monitoring.
+@ u team 0 0 Users
+@ s server 1 0 Service
+@ o user 1 1 On-call
+@ d gauge 2 0 Dashboards
+@ b db 2 1 Database
+= Flying blind | PROBLEM
++ u s o
+~ !u>s slow
+" u Your shop is broken!
+" o Really? It looks fine from here.
+Without signals you learn about failures from angry customers, and then you guess.
+= Many small parts | PROBLEM
++ b
+~ s>b ;; !b>s
+" o Which of the 40 services is it?
+One click may pass through dozens of services. A log file on each machine no longer tells the story.
+= Make the system speak | SOLUTION
++ d
+~ s>d metrics ;; b>d logs ;; d>o alert
+: d ok
+" o Database locks since 10:42.
+**Monitoring** tells you *that* something is wrong. **Observability** lets you ask *why*, even for problems you did not expect.
+= How it helps
+| Need | Signal |
+| Is it working? | Metrics |
+| What happened? | Logs |
+| Where is the time lost? | Traces |
+| Wake someone | Alerts |
+| Plan growth | Trends |
+= What SRE adds
+" o How reliable must it be?
+**Site Reliability Engineering** treats operations as an engineering problem: measurable goals, error budgets, and automation instead of repeated manual work.
+? Observability answers mainly... | how much | *why | who pays
+
+# ob-history | A short history of monitoring | Beginner | From ping to OpenTelemetry.
+@h 1999 Nagios ; 2003 SRE at Google ; 2010 Dapper, ELK era ; 2012 Prometheus ; 2014 Grafana ; 2016 SRE book ; 2019 OpenTelemetry
+= 1999 | HISTORY
+**Nagios** (first as NetSaint) checks hosts and services and sends alarms.
+= 2003 | HISTORY
+Ben Treynor Sloss starts the first SRE team at Google.
+= 2010 | HISTORY
+Google publishes **Dapper** on distributed tracing. Around these years Elasticsearch, Logstash and Kibana make log search common.
+= 2012 | HISTORY
+**Prometheus** starts at SoundCloud, inspired by Google's Borgmon. It joins the CNCF in 2016.
+= 2014 | HISTORY
+**Grafana**: dashboards for any source.
+= 2016 | HISTORY
+Google publishes the *Site Reliability Engineering* book.
+= 2019 | HISTORY
+OpenTracing and OpenCensus join as **OpenTelemetry**.
+? Prometheus started at... | Netflix | *SoundCloud | Amazon
+^ https://sre.google/books/ Google SRE books
+
+## Signals one by one
+# c-metric | Metric | Beginner | A number over time.
+@@ server Service ; gauge Metric ; user On-call ; db Time series
+= Without it | PROBLEM
+"It feels slow" cannot be compared with yesterday.
+= What it is | SOLUTION
+A value measured again and again: requests, errors, memory.
+= How it works
+| Type | Example |
+| Counter | Requests so far |
+| Gauge | Memory now |
+| Histogram | Response times by range |
+= Real-time example | PRACTICE
+Memory grows a little each day. The trend shows it will be full on Thursday, so it is fixed on Tuesday.
+? Requests so far is a... | gauge | *counter | log
+
+# c-log | Log | Beginner | What happened, in order.
+@@ server Service ; doc Log ; user Developer ; db Log store
+= Without it | PROBLEM
+An order vanished and nothing was written down.
+= What it is | SOLUTION
+A dated record of an event.
+= How it works
+Levels: debug, info, warn, error. Structured logs (JSON) can be searched by field.
+!! Never log passwords, card numbers or tokens.
+= Real-time example | PRACTICE
+Searching for the request ID shows one order's path through five services in seconds.
+? What must never be logged? | Times | *Passwords | Errors
+
+# c-trace | Trace and span | Intermediate | The journey of one request.
+@@ user User ; board Trace ; server Services ; card Span
+= Without it | PROBLEM
+The page takes 4 seconds and every team says "not us".
+= What it is | SOLUTION
+A **trace** follows one request; each piece of work is a **span** with start and length.
+= How it works
+A trace ID is passed from service to service in a header.
+= Real-time example | PRACTICE
+The trace shows 3.6 of 4 seconds in one database call made 40 times. One query fixes it.
+? One piece of work in a trace is a... | log | *span | counter
+
+# c-alert | Alert and on-call | Beginner | The right person, for the right reason.
+@@ gauge Monitor ; flag Alert ; user On-call ; doc Runbook
+= Without it | PROBLEM
+Fifty alarms a night, so people stop reading them. This is **alert fatigue**.
+= What it is | SOLUTION
+A message that a person must act now. Everything else is a ticket or a graph.
+= How it works
+Alert on what users feel. Link a **runbook** with first steps. Rotate on-call fairly.
+= Real-time example | PRACTICE
+A team deleted 60 of 75 alerts and answered the rest faster.
+? Page a person only when... | CPU is 60% | *someone must act now | a log is written
+
+# c-dash | Dashboard | Beginner | The state at a glance.
+@@ db Data ; board Dashboard ; team Team ; gauge Four signals
+= Without it | PROBLEM
+During an incident everyone runs different commands.
+= What it is | SOLUTION
+A page of graphs for one question: is this service healthy?
+= How it works
+Start with latency, traffic, errors, saturation. Mark deployments on the graph.
+= Real-time example | PRACTICE
+Errors jump exactly at the deployment line. Rollback takes one minute, no debate.
+? Mark on graphs... | birthdays | *deployments | prices

@@ -1,0 +1,179 @@
+% kubectl | Kubernetes | #2f4fb3 | Why orchestration exists, each object on its own, then rollouts, networking, security and Helm.
+
+## Introduction
+# k8-intro | Why Kubernetes exists | Beginner | What happens when containers become too many for people.
+@ o user 0 0 Operations
+@ k gear 1 0 Kubernetes
+@ n1 server 2 0 Server 1
+@ n2 server 2 1 Server 2
+@ u team 3 0 Users
+= A few containers are easy
++ o n1 u
+~ o>n1 docker run ;; n1>u
+" o Five containers, no problem.
+With five containers on one server, commands and a notebook are enough.
+= Five hundred are not | PROBLEM
++ n2
+: n1 err crashed
+~ !n1>u
+" o It is 3 a.m. Which ones were there?
+A server dies. Which containers ran there? Where is free space? Who sends users to the new address? How do we update without downtime?
+= Describe, do not command | SOLUTION
++ k
+~ o>k I want 3 copies ;; k>n1 ;; k>n2
+: k ok watching
+You describe the wished state. **Kubernetes** compares it with reality all the time and repairs the difference.
+= How it helps
+: n1 err down
+: n2 ok took over
+~ k>n2 restart ;; n2>u
+| Need | Kubernetes |
+| A server fails | Moves the work |
+| More users | Adds copies |
+| New version | Rolls out gradually |
+| Bad version | Rolls back |
+| Find a service | Stable names |
+| Any cloud | Same API |
+= When it is too much | RISK
+" o For one blog? No.
+It needs knowledge and care. A small product is often happier on a managed service or one server with Compose.
+? Kubernetes keeps comparing... | prices | *wished state with reality | passwords
+^ https://kubernetes.io/docs/concepts/overview/ Kubernetes overview
+
+# k8-history | A short history of Kubernetes | Beginner | From Google's Borg to a world standard.
+@h 2003 Borg ; 2013 Docker ; 2014 Kubernetes ; 2015 v1.0, CNCF ; 2018 Graduates ; 2022 No dockershim ; 2026 v1.36
+= About 2003 | HISTORY
+Google builds **Borg** inside the company to run its services on huge numbers of machines. Later comes Omega.
+= 2013 | HISTORY
+Docker makes containers easy for everyone, and the need to run many of them appears.
+= 2014 | HISTORY
+First commit on 6 June 2014; announced at DockerCon. *Kubernetes* is Greek for helmsman.
+= 2015 | HISTORY
+Version 1.0 on 21 July. Google gives it to the new Cloud Native Computing Foundation.
+= 2018 | HISTORY
+The first project to **graduate** from the CNCF. All large clouds offer it as a service.
+= 2022 | HISTORY
+Version 1.24 removes dockershim; clusters use containerd or CRI-O. Docker images still work.
+= 2026 | HISTORY
+v1.36 in April: user namespaces stable. Ingress NGINX retired in March; Gateway API recommended.
+? Kubernetes grew from experience with... | Hudson | *Borg | Subversion
+^ https://kubernetes.io/blog/2024/06/06/10-years-of-kubernetes/ 10 years of Kubernetes
+
+## Objects one by one
+# c-cluster | Cluster and node | Beginner | The machines and their manager.
+@@ user You ; gear Control plane ; server Nodes ; db etcd
+= Without it | PROBLEM
+Ten separate servers, managed one at a time.
+= What it is | SOLUTION
+A **cluster** is a group of machines used as one. **Nodes** run your work; the **control plane** decides.
+= How it works
+$ kubectl get nodes
+Each node has a kubelet that reports and obeys.
+= Real-time example | PRACTICE
+A shop has three nodes in three zones. One zone loses power; the other two carry on.
+? Who decides where work runs? | A node | *The control plane | The user
+
+# c-k8pod | Pod | Beginner | The smallest thing you run.
+@@ gear Deployment ; pod Pod ; team Users ; box Containers
+= Without it | PROBLEM
+A container and its helper would be placed on different machines and could not share files.
+= What it is | SOLUTION
+One or more containers that live together, with one IP address.
+= How it works
+Pods are temporary. They are replaced, not repaired.
+$ kubectl get pods
+= Real-time example | PRACTICE
+A web container with a small helper that ships its logs, in one Pod.
+? Pods are... | permanent | *temporary | servers
+
+# c-ns | Namespace, label, selector | Beginner | Order in a busy cluster.
+@@ user Team ; folder Namespace ; pod Pods ; card Labels
+= Without them | PROBLEM
+Two teams both call their app `web`, and one deletes the other's.
+= What they are | SOLUTION
+A **namespace** is a room for a team or environment. **Labels** are tags such as `app=web`. **Selectors** find by label.
+= How it works
+$ kubectl get pods -n shop -l app=web
+Services and Deployments find their Pods by selectors.
+= Real-time example | PRACTICE
+Namespaces `test` and `prod`, with quotas so test cannot use all memory.
+? A Service finds Pods by... | name | *labels | age
+
+# c-dep | Deployment and ReplicaSet | Beginner | Keep N copies, update safely.
+@@ user You ; board Deployment ; pod Pods ; folder ReplicaSet
+= Without it | PROBLEM
+A crashed Pod stays gone. Updating means downtime.
+= What it is | SOLUTION
+A **Deployment** states image and number of copies. Its **ReplicaSet** keeps that number.
+= How it works
+Change the image and new Pods replace old ones step by step.
+$ kubectl rollout undo deployment/web
+= Real-time example | PRACTICE
+Version 2 fails its readiness probe. The rollout stops, users stay on version 1, the team fixes it after lunch.
+? Who keeps the number of Pods? | Service | *ReplicaSet | Secret
+
+# c-service | Service | Beginner | One steady address.
+@@ pod Client ; router Service ; pod Web Pods ; db DNS
+= Without it | PROBLEM
+Pods change address with every restart.
+= What it is | SOLUTION
+A stable name and address that passes traffic to ready Pods.
+= How it works
+ClusterIP inside, NodePort on each node, LoadBalancer from the cloud.
+= Real-time example | PRACTICE
+The shop calls `http://payments`. Payments moved nodes four times today and the shop never noticed.
+? Inside-only type? | NodePort | *ClusterIP | LoadBalancer
+
+# c-ingress | Ingress and Gateway | Intermediate | Many sites through one door.
+@@ user Visitor ; gate Gateway ; pod Services ; doc Routes
+= Without it | PROBLEM
+Each service needs its own cloud load balancer, and its own bill.
+= What it is | SOLUTION
+One entrance that sends `/shop` here and `/blog` there, and ends TLS.
+= How it works
+**Gateway API** is the recommended successor of Ingress. A controller does the real work.
+= Real-time example | PRACTICE
+Twelve sites, one load balancer, certificates renewed by cert-manager.
+? Recommended today? | Ingress only | *Gateway API | NodePort
+
+# c-cfg | ConfigMap and Secret | Beginner | Settings outside the image.
+@@ user You ; doc ConfigMap ; pod Pod ; key Secret
+= Without them | PROBLEM
+Settings inside the image: a new image for each environment.
+= What they are | SOLUTION
+**ConfigMap** for plain settings, **Secret** for sensitive ones.
+= How it works
+Given to Pods as variables or files. Base64 in a Secret is not encryption; turn on encryption at rest.
+= Real-time example | PRACTICE
+The same image in test and production, with two ConfigMaps.
+? Is base64 encryption? | Yes | *No | Sometimes
+
+# c-pvc | Volume, PV and PVC | Intermediate | Disks that follow Pods.
+@@ pod Pod ; card PVC ; db Disk ; gear StorageClass
+= Without it | PROBLEM
+The database Pod moves and its data stays behind.
+= What it is | SOLUTION
+A **claim** (PVC) asks for storage, a **volume** (PV) is the disk, a **StorageClass** makes it on demand.
+= How it works
+The Pod names the claim; the disk is attached where the Pod runs.
+= Real-time example | PRACTICE
+A node fails. The database Pod starts on another, with the same disk attached.
+? Who asks for storage? | PV | *PVC | Node
+
+# c-kctl | kubectl and YAML | Beginner | How you speak to a cluster.
+@@ user You ; laptop kubectl ; gear API server ; doc YAML file
+= Without it | PROBLEM
+You would have to write raw HTTP requests.
+= What it is | SOLUTION
+**kubectl** sends your wish, usually written in a YAML file.
+= How it works
+| Field | Meaning |
+| apiVersion | Which API |
+| kind | What object |
+| metadata | Name, labels |
+| spec | What you wish |
+| status | What is, written by the cluster |
+$ kubectl apply -f web.yaml
+= Real-time example | PRACTICE
+All YAML is in Git, so a lost cluster can be rebuilt from files.
+? Your wish goes in... | status | *spec | logs

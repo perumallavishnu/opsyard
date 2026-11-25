@@ -1,0 +1,308 @@
+% git | Git | #c25a12 | Version control from the first commit to rebasing, recovery and what is inside the .git folder.
+
+## First steps
+# git-why | Why version control | Beginner | A history you can trust, shared by everyone.
+@ a laptop 0 0 Ana
+@ b laptop 0 2 Ben
+@ f folder 1 1 Shared folder
+@ r db 2 1 Git history
+= final_v2_REALLY | PROBLEM
++ a b f
+~ a>f app.js ;; !b>f overwrites
+Copying files around loses work. Nobody knows who changed what, or why, or how to go back.
+= A commit is a snapshot | SOLUTION
+x f
++ r
+~ a>r commit ;; b>r commit
+Git records snapshots called **commits**. Each has an author, a date, a message, and a link to its parent.
+= Distributed
+* a b
+Every clone has the **full history**. You can commit, branch and compare offline.
+= Git is not GitHub
+* r
+Git is the tool on your machine. GitHub, GitLab and Bitbucket host repositories and add reviews and automation.
+= Set up once
+$ git config --global user.name "Ana"
+$ git config --global user.email "ana@example.com"
+$ git config --global init.defaultBranch main
+Git 3.0 is planned to make `main` the built-in default. Setting it now gives the same result today.
+? Where does the full Git history live? | Only on GitHub | *In every clone | In the last commit
+^ https://git-scm.com/book/en/v2 Pro Git book
+
+# git-areas | Working tree, staging, repository | Beginner | The three places a change passes through.
+@ w folder 0 0 Working tree
+@ s layer 1 0 Staging area
+@ r db 2 0 Repository
+= Edit
++ w
+$ git init
+$ git status
+Files you see and edit are the **working tree**. A new file is *untracked* until you tell Git about it.
+= Stage
++ s
+~ w>s git add
+$ git add app.js
+$ git add -p
+The **staging area** (index) is a draft of the next commit. `-p` stages part of a file.
+= Commit
++ r
+~ s>r git commit
+$ git commit -m "Add login form"
+The staged draft becomes a permanent snapshot.
+= See differences
+* w s r
+$ git diff
+$ git diff --staged
+Plain `diff` compares working tree to staging. `--staged` compares staging to the last commit.
+= Undo a step
+~ s>w restore --staged
+$ git restore --staged app.js
+$ git restore app.js
+The first unstages and keeps your edit.
+!! `git restore app.js` throws away unstaged edits in that file. Git has no copy of them.
+= Ignore
+* w
+List build output, secrets and local settings in `.gitignore`. It does not affect files already tracked.
+? What does `git diff --staged` compare? | Working tree and staging | *Staging and last commit | Two branches
+
+# git-objects | Inside .git | Intermediate | Blobs, trees, commits, and why history is tamper-evident.
+@ b1 card 2 0 Blob app.js
+@ b2 card 2 1 Blob README
+@ t folder 1 0 Tree
+@ c commit 0 0 Commit
+@ p commit 0 1 Parent commit
+@ m flag -1 0 main
+= Blobs
++ b1 b2
+A **blob** holds file contents. Its name is a hash of what is inside. The same content is stored once.
+= Trees
++ t
+~ t>b1 app.js ;; t>b2 README
+A **tree** lists names and points to blobs and other trees. It is a directory.
+= Commits
++ c p
+~ c>t ;; c>p parent
+A **commit** points to one tree and its parents, plus author and message.
+= Tamper-evident
+* p c
+: p err changed
+Change one old byte and its hash changes, so every later commit hash changes too. Rewriting is always visible.
+Repositories use SHA-1 today by default; Git 3.0 plans SHA-256 for **new** repositories.
+= Branches are labels
++ m
+~ m>c
+A branch is a small reference holding one commit hash. That is why creating one is instant. **HEAD** says which branch you are on.
+$ git cat-file -p HEAD
+? A branch is... | a copy of all files | *a pointer to a commit | a tree
+
+## Branches
+# git-branch | Branching and merging | Beginner | Work in parallel, then combine.
+@ a commit 0 0 A
+@ b commit 1 0 B
+@ c commit 2 1 C
+@ d commit 2 0 D
+@ m commit 3 0 M
+@ f flag 3 1 feature
+= A line of commits
++ a b
+~ b>a parent
+Each commit points back to its parent.
+= Create a branch
++ c f
+~ c>b parent
+$ git switch -c feature
+New commits move only `feature`. `main` stays at B.
+= main moves too
++ d
+~ d>b parent
+A teammate merges D. The two lines have diverged.
+= Merge
++ m
+~ m>d ;; m>c
+$ git switch main
+$ git merge feature
+Git finds the common ancestor (B), compares both sides to it and creates a **merge commit** with two parents.
+= Fast-forward
+* b c
+If main had not moved, Git would simply slide the label forward: no merge commit. `--no-ff` forces one.
+= Conflict
+: m err conflict
+* m
+When both sides changed the same lines, Git asks you. Edit the file, remove the markers, then:
+$ git add app.js
+$ git commit
+To give up: `git merge --abort`.
+? When is a fast-forward possible? | Always | *When the target branch has not moved | When there is a conflict
+
+# git-rebase | Rebase and cherry-pick | Intermediate | Replaying commits for a straight history.
+@ a commit 0 0 A
+@ b commit 1 0 B
+@ d commit 2 0 D
+@ c commit 1 1 C
+@ c2 commit 3 0 C2
+= Diverged
++ a b d c
+~ b>a ;; d>b ;; c>a
+Your commit C started at A. `main` has since gained B and D.
+= Replay
++ c2
+~ c2>d
+$ git switch feature
+$ git rebase main
+Rebase makes a **new** commit C2 with the same change, on top of D.
+= The old one is left behind
+* c c2
+: c off unreferenced
+C2 has a different hash because its parent differs. C is kept for a while and can be found with reflog.
+= The golden rule | RISK
+* c
+: c err others had it
+!! Do not rebase commits other people already use. Their copies and yours will disagree.
+On your own branch, push with `--force-with-lease`, which refuses if the remote has work you have not seen.
+$ git push --force-with-lease
+= Interactive
+$ git rebase -i HEAD~4
+Reorder, squash, reword or drop commits before review.
+= Cherry-pick
+~ c>d copy one
+$ git cherry-pick <commit>
+Copies one commit to the current branch. Typical use: bring a fix to a release branch.
+? Why is --force-with-lease safer than --force? | It is faster | *It refuses to overwrite unseen work | It makes a backup
+
+# git-remote | Remotes: fetch, pull, push | Beginner | Keeping two repositories in step.
+@ l db 0 0 Local repo
+@ t flag 1 0 origin/main
+@ r db 2 0 Remote
+@ b laptop 2 1 Ben
+= Clone
+~ r>l clone
++ l r
+$ git clone https://github.com/acme/shop.git
+Copies all history and names the source `origin`.
+= Ben pushes
+" b My change is ready.
++ b
+~ b>r push
+The remote moves ahead. Your copy does not know yet.
+= Fetch
++ t
+~ r>t fetch
+$ git fetch
+Updates **remote-tracking** labels such as `origin/main`. Your own files do not change.
+= Pull
+~ t>l merge
+$ git pull --rebase
+Pull is fetch followed by merge, or by rebase.
+= Push rejected
+~ !l>r push
+: r err not fast-forward
+The remote has commits you lack. Fetch, combine, then push.
+$ git push -u origin feature
+? Which command never changes your files? | git pull | *git fetch | git merge
+
+## Safety
+# git-undo | Undoing things | Intermediate | reset, revert, stash and the reflog.
+@ a commit 0 0 A
+@ b commit 1 0 B
+@ c commit 2 0 Bad commit
+@ r commit 3 0 Revert
+@ s bucket 1 1 Stash
+@ l doc 2 1 Reflog
+= Something went wrong
++ a b c
+: c err bug
+The last commit is wrong. First question: has anyone else seen it?
+= Not shared: reset
+~ c>b reset
+$ git reset --soft HEAD~1
+$ git reset --mixed HEAD~1
+$ git reset --hard HEAD~1
+`--soft` keeps changes staged. `--mixed` (default) keeps them unstaged. `--hard` deletes them.
+!! `--hard` discards uncommitted work for good.
+= Shared: revert
++ r
+~ r>c opposite
+$ git revert <commit>
+Adds a new commit that cancels the old one. History stays intact, so it is safe on shared branches.
+= Stash
++ s
+$ git stash push -m "half done"
+$ git stash pop
+Shelves uncommitted work so you can switch task.
+= Reflog
++ l
+~ l>c still here
+$ git reflog
+$ git switch -c rescue HEAD@{2}
+The reflog records where HEAD has been on your machine. Commits that look lost can usually be recovered for weeks.
+= Find the culprit
+* c
+$ git bisect start
+$ git bisect bad
+$ git bisect good v1.4
+Bisect halves the range each time: about 10 tests for 1000 commits. `git blame` shows who last changed each line.
+? Safe way to undo a commit others already pulled? | reset --hard | *revert | stash
+
+# git-flow | Branching strategies | Intermediate | Trunk-based, GitHub Flow and Git Flow.
+@ m flag 0 0 main
+@ f1 commit 1 0 Feature
+@ pr shield 2 0 Review
+@ dev flag 0 1 develop
+@ rel flag 1 1 release
+@ prod rack 3 0 Production
+= GitHub Flow
++ m f1 pr prod
+~ m>f1 branch ;; f1>pr pull request ;; pr>prod merge
+Branch from main, open a pull request, review, merge, deploy. Simple, and right for most web services.
+= Trunk-based
+* m
+~ f1>m hours
+Everyone merges to main at least daily. Unfinished work hides behind **feature flags**. It needs strong automated tests, and is what continuous integration really means.
+= Git Flow
++ dev rel
+~ dev>rel ;; rel>m
+Long-lived `develop` and `main`, plus release and hotfix branches. Suits products with several supported versions; heavy for a website.
+= Tags and versions
+: m info v2.3.1
+$ git tag -a v2.3.1 -m "Release 2.3.1"
+$ git push origin v2.3.1
+Semantic versioning: MAJOR breaks, MINOR adds, PATCH fixes.
+= Good commits | PRACTICE
+* f1
+One idea each, imperative subject: "Add retry to payment client". Conventional Commits adds a type: `feat:`, `fix:`, `docs:`.
+? Trunk-based development hides unfinished work with... | long branches | *feature flags | tags
+
+# git-advanced | Hooks, worktrees, submodules, LFS | Advanced | Tools for larger repositories.
+@ r db 1 0 Repository
+@ h gate 0 0 Hook
+@ w folder 2 0 Worktree
+@ s box 1 1 Submodule
+@ l bucket 2 1 LFS store
+= Hooks
++ r h
+~ h>r checks
+Scripts Git runs at set moments: `pre-commit`, `commit-msg`, `pre-push`. Local hooks can be skipped, so repeat important checks in CI.
+= Worktrees
++ w
+~ r>w
+$ git worktree add ../hotfix main
+A second working folder on another branch, sharing one repository. No stashing needed.
+= Submodules
++ s
+~ r>s pinned commit
+$ git submodule update --init --recursive
+A submodule pins another repository at an exact commit. A package manager is usually simpler.
+= Large files
++ l
+~ r>l pointer
+Git LFS keeps big binaries outside history and stores small pointers.
+$ git lfs track "*.psd"
+= Huge repositories
+* r
+$ git clone --filter=blob:none <url>
+$ git sparse-checkout set services/payments
+Partial clone downloads contents when needed; sparse checkout shows only some folders.
+= Leaked a secret? | RISK
+: r err key in history
+Removing it in a new commit is not enough: history still has it. **Revoke the key first**, then clean history with `git filter-repo`.
+? First action after pushing a secret? | Delete the file | *Revoke the secret | Rename the branch

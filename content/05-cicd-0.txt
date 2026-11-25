@@ -1,0 +1,125 @@
+% cicd | CI/CD | #0f6b63 | Why automated delivery exists, its parts one by one, then testing, release strategies and GitOps.
+
+## Introduction
+# cicd-why | Why CI/CD exists | Beginner | Release night, and how it disappeared.
+@ d team 0 0 Dev team
+@ o user 1 0 Operations
+@ p gear 1 1 Pipeline
+@ s rack 2 0 Production
+@ u team 3 0 Users
+= Release night | PROBLEM
++ d o s
+w d>o 60 steps in a document
+" o Step 37 fails, it is 2 a.m.
+w !o>s by hand
+: s err down
+Every three months the whole team stays at night. Copying files by hand, following a long list, hoping.
+= Why it hurts | PROBLEM
++ u
+~ !s>u errors
+" u It worked yesterday!
+Many changes at once: when something breaks nobody knows which one. So releases get rarer, and larger, and worse.
+= A machine does the same steps | SOLUTION
++ p
+w d>p small change
+~ p>s tested release
+: p ok 8 minutes
+: s ok live
+**Continuous integration** builds and tests every change. **Continuous delivery** makes each one ready to release. **Continuous deployment** releases it by itself.
+= What it gives
+| Before | With CI/CD |
+| Once a quarter | Daily or more |
+| By hand | Same steps each time |
+| Bugs found late | Found in minutes |
+| Fear | Routine, with a way back |
+= In maintenance
+" o Security fix: live in 20 minutes.
+When a vulnerability is announced, a team with a pipeline fixes and releases the same hour.
+? Why are small releases safer? | They are cheaper | *Fewer changes to search when something breaks | No tests needed
+^ https://martinfowler.com/articles/continuousIntegration.html Martin Fowler: Continuous Integration
+
+# cicd-history | A short history of CI/CD | Beginner | From nightly builds to GitOps.
+@h 1991 The term CI ; 1999 XP ; 2001 CruiseControl ; 2010 Continuous Delivery ; 2017 GitOps ; 2018 Hosted CI
+= 1991 | HISTORY
+Grady Booch uses the term *continuous integration*.
+= 1999 | HISTORY
+Extreme Programming makes integrating many times a day a rule.
+= 2001 | HISTORY
+**CruiseControl**, an early open source CI server.
+= 2010 | HISTORY
+Jez Humble and David Farley publish *Continuous Delivery*: the deployment pipeline gets its name.
+= 2017 | HISTORY
+Weaveworks introduces the word **GitOps**.
+= Since 2018 | HISTORY
+CI moves into the code host: GitLab CI and GitHub Actions. Pipelines become files next to the code.
+? Which book named the deployment pipeline? | The Scrum Guide | *Continuous Delivery | The C Book
+
+## Building blocks
+# c-pipe | Pipeline, stage, job | Beginner | The shape of every delivery system.
+@@ user Developer ; gear Pipeline ; rack Production ; shield Stages
+= Without it | PROBLEM
+Each person releases in their own way.
+= What it is | SOLUTION
+A fixed path every change travels. **Stages** run in order, **jobs** inside a stage can run together.
+= How it works
+Typical stages: build, unit test, scan, package, deploy to test, integration test, approve, deploy.
+= Real-time example | PRACTICE
+A change with a failing test stops at minute two. It never reaches a person, let alone a customer.
+? Jobs in one stage can... | never run | *run together | skip the code
+
+# c-artifact | Artifact and registry | Beginner | The thing you actually ship.
+@@ gear Build ; box Artifact ; server Servers ; bucket Registry
+= Without it | PROBLEM
+Each server builds the code itself, and each result is a little different.
+= What it is | SOLUTION
+An **artifact** is the result of a build: image, package, zip. A **registry** stores it by version.
+= How it works
+Build once, store, use the same one everywhere. Docker Hub, GHCR, Nexus, Artifactory, ECR.
+= Real-time example | PRACTICE
+Production fails. The team redeploys artifact 1.8.1 from the registry in two minutes; no rebuild.
+? Build how often per version? | Per server | *Once | Never
+
+# c-envs | Environments | Beginner | Places to try before customers see it.
+@@ box Version ; server Staging ; rack Production ; server Test
+= Without them | PROBLEM
+Customers are the testers.
+= What they are | SOLUTION
+Separate copies of the system: development, test, staging, production.
+= How it works
+Same artifact, different settings and data. Staging should look as much like production as you can afford.
+= Real-time example | PRACTICE
+A date bug appears only with the real amount of data. Staging with a masked copy of production data shows it.
+? Staging should resemble... | a laptop | *production | nothing
+
+# c-testtypes | Types of tests | Beginner | What each test catches.
+@@ user Developer ; shield Tests ; server System ; user Tester
+= Without them | PROBLEM
+Every change may break something, and you learn it from users.
+= What they are | SOLUTION
+| Test | Question |
+| Unit | Does this function work? |
+| Integration | Do parts work together? |
+| End to end | Can a user finish the task? |
+| Regression | Does the old still work? |
+| Smoke | Is it alive after deploy? |
+| Load | Can it carry the traffic? |
+| Security | Can it be abused? |
+| Acceptance | Is it what was asked? |
+= How they fit
+Fast ones first, on every change. Slow ones later or at night.
+= Real-time example | PRACTICE
+A smoke test after each deploy logs in and opens one order. It caught a missing setting in 30 seconds.
+? After a deploy, first run... | load tests | *smoke tests | unit tests
+
+# c-rollback | Rollback and roll forward | Beginner | Getting out of trouble.
+@@ user On-call ; gear Rollback ; rack Production ; bucket Last good version
+= Without it | PROBLEM
+" a Who remembers the old settings?
+A bad release, and no way back.
+= What it is | SOLUTION
+**Rollback** returns to the last good version. **Roll forward** releases a quick fix.
+= How it works
+Keep the last artifacts and make database changes that both versions can use.
+= Real-time example | PRACTICE
+Errors rise after a canary. The pipeline sends traffic back by itself in one minute, and the team finds the cause in calm.
+? Rollback is hard when... | code changed | *the database changed in an incompatible way | it is Friday

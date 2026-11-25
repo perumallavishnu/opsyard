@@ -1,0 +1,161 @@
+% docker | Docker | #1f5fa8 | Why containers exist, each part on its own, then builds, storage, networks, Compose and security.
+
+## Introduction
+# dk-intro | Why Docker exists | Beginner | From "works on my machine" to the same box everywhere.
+@ d user 0 0 Developer
+@ q user 1 0 Tester
+@ o user 2 0 Operations
+@ s rack 3 0 Server
+@ c box 1 1 Container
+= Works on my machine | PROBLEM
++ d q o s
+w d>q code
+" q It does not start here.
+" d It works on my machine!
+w !q>o please install
+: s err wrong version
+The same code meets different systems: another language version, a missing library, another setting. Days are lost.
+= Virtual machines were heavy | PROBLEM
+* o s
+" o Ten apps, ten whole systems.
+Giving each app its own virtual machine solves the conflict, but each carries a full operating system: gigabytes and minutes to start.
+= Pack the app with its needs | SOLUTION
++ c
+~ d>c pack ;; c>s run
+: c ok same everywhere
+: s ok running
+" q It starts at once.
+A **container** packs the program with libraries and settings and shares the host's kernel. Small, quick, the same everywhere.
+Think of the shipping container: the ship does not care what is inside, because every box has the same shape.
+= How it helps development and maintenance
+| Need | Docker |
+| New colleague | One command to start everything |
+| Test as in production | The same image |
+| Many apps on one server | Isolated from each other |
+| Update | Replace the container |
+| Go back | Start the old image |
+= What grew from it
+" o Now I have 500 containers...
+Easy packing led to many small services, and that created the need for Kubernetes.
+? A container shares the host's... | files | *kernel | passwords
+^ https://docs.docker.com/get-started/docker-overview/ Docker overview
+
+# dk-history | A short history of containers | Beginner | From chroot to everywhere.
+@h 1979 chroot ; 2000 Jails ; 2008 LXC ; 2013 Docker ; 2015 OCI ; 2017 containerd ; 2025 Engine 29
+= 1979 | HISTORY
+Unix **chroot** shows a process only part of the file system.
+= 2000 | HISTORY
+**FreeBSD Jails** isolate more: files, users, network.
+= 2008 | HISTORY
+**LXC** joins Linux namespaces and cgroups into containers.
+= 2013 | HISTORY
+Solomon Hykes shows **Docker** at PyCon. Simple commands, images and a registry make containers popular.
+= 2015 | HISTORY
+The **Open Container Initiative** (OCI) sets shared standards for images and runtimes.
+= 2017 | HISTORY
+**containerd** goes to the CNCF. Kubernetes and others use it directly.
+= 2025 | HISTORY
+Docker Engine 29 uses the containerd image store by default on fresh installs.
+? Which year was Docker shown? | 2008 | *2013 | 2017
+
+## Parts of Docker
+# c-image | Image | Beginner | The frozen recipe result.
+@@ doc Dockerfile ; stack Image ; box Containers ; layer Layers
+= Without it | PROBLEM
+Installing by hand on each server, never exactly the same.
+= What it is | SOLUTION
+A read-only package with the app, libraries and settings. Many containers can start from one image.
+= How it works
+It is made of **layers**. Layers are shared, so ten images on the same base store it once.
+$ docker image ls
+= Real-time example | PRACTICE
+A bank keeps one approved base image. When it is patched, all forty apps are rebuilt on it overnight.
+? Is an image changed by running it? | Yes | *No, it is read-only | Only at night
+
+# c-container | Container | Beginner | A running image.
+@@ stack Image ; box Container ; team Users ; gauge Limits
+= Without it | PROBLEM
+Two apps on one server fight over ports, libraries and memory.
+= What it is | SOLUTION
+A process with its own view of files, network and processes, made from an image.
+= How it works
+Create, start, stop, remove. Changes inside disappear with it unless stored in a volume.
+$ docker run -d --name web -p 8080:80 nginx
+= Real-time example | PRACTICE
+A developer runs three versions of a database side by side to test an upgrade, then deletes them in a second.
+? Data inside a removed container... | stays | *is gone unless in a volume | is emailed
+
+# c-registry | Registry, repository, tag | Beginner | Where images are stored and named.
+@@ user Developer ; cloud Registry ; server Servers ; card Tag
+= Without it | PROBLEM
+Images are copied between machines on USB sticks.
+= What it is | SOLUTION
+A **registry** (Docker Hub, GHCR, ECR) stores **repositories** of images. A **tag** names a version.
+= How it works
+$ docker pull nginx:1.28
+$ docker push ghcr.io/acme/shop:1.0
+A tag can be moved; a **digest** (`sha256:...`) cannot.
+= Real-time example | PRACTICE
+"latest" changed on Friday and broke a server restart on Sunday. Now they pin versions.
+? Which never changes meaning? | latest | a tag | *a digest
+
+# c-dfile | Dockerfile | Beginner | The recipe for an image.
+@@ user Developer ; doc Dockerfile ; stack Image ; gear BuildKit
+= Without it | PROBLEM
+Nobody remembers how the image was made.
+= What it is | SOLUTION
+A text file with the steps to build an image.
+= How it works
+| Word | Job |
+| FROM | Base image |
+| WORKDIR | Folder |
+| COPY | Add files |
+| RUN | Do at build time |
+| ENV | Set a variable |
+| USER | Run as |
+| CMD | Default command |
+= Real-time example | PRACTICE
+The recipe is reviewed in a pull request like code: "why are we running as root?"
+? RUN happens at... | container start | *build time | deletion
+
+# c-volume | Volume and bind mount | Beginner | Data that stays.
+@@ box Container ; bucket Volume ; db Data ; folder Host folder
+= Without it | PROBLEM
+Updating the database container deletes the data.
+= What it is | SOLUTION
+A **volume** is storage managed by Docker. A **bind mount** shows a host folder inside.
+= How it works
+Create a volume, then name it when starting the container. Docker mounts it at the path the program uses.
+$ docker volume create pgdata
+$ docker run -v pgdata:/var/lib/postgresql postgres:18
+= Real-time example | PRACTICE
+A shop upgrades its database image: stop, start the new one on the same volume, data intact. Backup first.
+? Best for database data? | Writable layer | *Volume | Image
+
+# c-dknet | Docker network | Beginner | How containers find each other.
+@@ user Browser ; router Docker network ; box App ; db Database
+= Without it | PROBLEM
+Containers get new addresses each time, so fixed numbers break.
+= What it is | SOLUTION
+A private network where containers reach each other **by name**.
+= How it works
+$ docker network create shop
+$ docker run -d --name db --network shop postgres:18
+`-p 8080:80` opens one door to the outside.
+= Real-time example | PRACTICE
+Only the web container is published. The database is reachable by the app and by nobody else.
+? Containers on one network use... | IP lists | *names | emails
+
+# c-compose | Compose | Beginner | Several containers as one app.
+@@ user Developer ; doc compose.yaml ; box Containers ; router Network
+= Without it | PROBLEM
+Six long `docker run` commands in the right order.
+= What it is | SOLUTION
+One file that describes all services, networks and volumes.
+= How it works
+The first command creates the network and starts everything. The second stops and removes it, but keeps named volumes.
+$ docker compose up -d
+$ docker compose down
+= Real-time example | PRACTICE
+A new colleague has web, API, database and cache running ten minutes after getting a laptop.
+? Compose is mainly for... | one host | many data centres | *one host, such as development

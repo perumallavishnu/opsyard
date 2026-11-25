@@ -1,0 +1,161 @@
+% observe | Observability and SRE | #28753f | Metrics, logs, traces, alerts, SLOs, incidents and chaos.
+
+## Signals
+# ob-what | Monitoring and observability | Beginner | Knowing that it broke, and why.
+@ app pod 0 0 App
+@ m gauge 1 0 Metrics
+@ l doc 1 1 Logs
+@ t board 0 1 Traces
+@ u user 2 0 On-call
+= In the dark | PROBLEM
++ app u
+~ !app>u customers call
+If users tell you first, you are not monitoring.
+= Metrics
++ m
+~ app>m 12 req/s
+Numbers over time. Cheap, good for alerts and trends.
+= Logs
++ l
+~ app>l event
+Records of single events. Structured JSON with a request ID is searchable.
+= Traces
++ t
+~ app>t spans
+The path of one request across services, with the time spent in each.
+= Four golden signals
+~ m>u alert
+* m
+**Latency, traffic, errors, saturation.** RED (rate, errors, duration) for services; USE (utilisation, saturation, errors) for resources.
+? Which signal follows one request across services? | Metrics | Logs | *Traces
+
+# ob-prom | Prometheus and Grafana | Intermediate | Pull metrics, query them, alert.
+@ a pod 0 0 App /metrics
+@ n server 0 1 Node exporter
+@ p db 1 0 Prometheus
+@ g board 2 0 Grafana
+@ am gear 1 1 Alertmanager
+@ o user 2 1 On-call
+= Expose
++ a n
+> http_requests_total{method="GET",status="200"} 1027
+A name, labels, a value. **Counter** only rises, **gauge** goes up and down, **histogram** counts by bucket.
+= Scrape
++ p
+~ p>a pull ;; p>n pull
+Prometheus pulls targets on an interval and stores time series.
+!! Labels with unbounded values such as user IDs create millions of series.
+= PromQL
+* p
+$ sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))
+The share of requests failing over 5 minutes.
+= Dashboards
++ g
+~ g>p query
+Start with golden signals. Few panels people read beat fifty they do not.
+= Alerts
++ am o
+~ p>am firing ;; am>o page
+Alertmanager groups, silences and routes. Page on **symptoms** users feel, and link a runbook.
+? Request count is which metric type? | Gauge | *Counter | Label
+^ https://prometheus.io/docs/ Prometheus docs
+
+# ob-otel | Logs and OpenTelemetry | Intermediate | One standard way to produce telemetry.
+@ a pod 0 0 Service A
+@ b pod 0 1 Service B
+@ c gear 1 0 OTel Collector
+@ l doc 2 0 Log store
+@ t board 2 1 Trace store
+= Vendor lock-in | PROBLEM
++ a b
+Each vendor's agent means changing code to change vendor.
+= OpenTelemetry
++ c
+~ a>c OTLP ;; b>c OTLP
+Standard libraries and a protocol. Many frameworks need no code changes.
+= Collector
+* c
+Receive, process (batch, filter, remove personal data), export.
+= Store
++ l t
+~ c>l ;; c>t
+Logs: Elasticsearch, OpenSearch, Loki. Traces: Jaeger, Tempo.
+= Join them
+~ a>b trace id
+* a b
+The trace ID passes in a `traceparent` header. Put it in logs to jump between them.
+= Sampling
+* t
+Keep all errors and slow requests, a share of the rest.
+? What links services in one trace? | IP address | *Propagated trace context | Log level
+^ https://opentelemetry.io/docs/ OpenTelemetry docs
+
+## Reliability
+# sre-slo | SLI, SLO and error budgets | Intermediate | How reliable is reliable enough?
+@ u team 0 0 Users
+@ s server 1 0 Service
+@ i gauge 2 0 SLI
+@ o flag 3 0 SLO 99.9%
+@ b bucket 3 1 Error budget
+@ d team 2 1 Team
+= 100% is wrong | PROBLEM
++ u s
+~ u>s
+Perfect reliability costs too much and stops all change. Users' own networks fail more often than that.
+= SLI
++ i
+~ s>i measure
+An indicator: good requests ÷ all requests.
+= SLO
++ o
+~ i>o compare
+A target: 99.9% over 30 days. An **SLA** is a contract with consequences, usually looser.
+= Error budget
++ b
+~ o>b 0.1%
+99.9% over 30 days allows about **43 minutes** of full outage.
+= Spend it
+" d Budget is low. Slow down.
++ d
+~ b>d
+: b warn 10% left
+Budget left: ship faster. Budget gone: work on reliability. The number decides, not the argument.
+= Burn rate
+* b
+Alert when the budget burns too fast: 14.4 times for an hour uses 2% of a 30-day budget.
+? 99.9% over 30 days allows about... | 4 minutes | *43 minutes | 7 hours
+^ https://sre.google/books/ Google SRE books
+
+# sre-inc | Incidents, postmortems and chaos | Advanced | Respond, learn, rehearse.
+@ al flag 0 0 Alert
+@ ic user 1 0 Incident commander
+@ op user 2 0 Responder
+@ co user 2 1 Communications
+@ s server 3 0 Service
+@ pm doc 1 1 Postmortem
+= Detect
+An alert on a user-facing symptom starts the clock. Declare the incident early; it is cheap to stand down.
++ al s
+~ s>al errors
+: s err failing
+= Roles
+" ic You fix, you inform, I coordinate.
+" op Rolling back now.
++ ic op co
+~ al>ic page ;; ic>op ;; ic>co
+One commander coordinates, responders act, one person updates others. The commander does not type fixes.
+= Mitigate first
+~ op>s roll back
+: s ok stable
+Restore service before finding the cause: roll back, switch over, add capacity, turn off a flag.
+= Postmortem
++ pm
+~ ic>pm
+**Blameless**: timeline, impact, causes, what helped, actions with owners. Ask how the system allowed it.
+= Chaos engineering
+~ !op>s kill one
+* s
+Set a hypothesis, limit the blast radius, break something on purpose, watch. Start outside production.
+= Toil
+Repeated manual work that grows with the service. SRE practice aims to keep it under half of the time.
+? First goal in an incident? | Find who did it | *Restore service | Write the report

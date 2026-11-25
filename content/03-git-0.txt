@@ -1,0 +1,150 @@
+% git | Git | #c25a12 | Why version control exists, its parts one by one, then branching, recovery and what is inside the .git folder.
+
+## Introduction
+# git-intro | Why Git exists | Beginner | The trouble of many people changing the same files.
+@ a user 0 0 Developer A
+@ b user 0 1 Developer B
+@ s folder 1 0 Shared folder
+@ g db 2 0 Git history
+@ p rack 3 0 Product
+= One folder for all | PROBLEM
++ a b s
+w a>s saves app.js
+w !b>s saves app.js
+" a Where did my work go?
+Two people save the same file. The second erases the first. Copies named `final`, `final2`, `final_really` appear.
+= No way back | PROBLEM
++ p
+~ !s>p release
+: p err broken
+" b Which change broke it?
+When something breaks, nobody knows what changed, who did it or why, and there is no earlier version to return to.
+= History for every change | SOLUTION
+x s
++ g
+w a>g commit
+w b>g commit
+: g ok both kept
+Git keeps every version as a **commit** with author, time and reason. Work from both is **merged**, and any earlier state can be restored.
+= How it helps development
+~ g>p safe release
+: p ok
+| Need | Git |
+| Work in parallel | Branches |
+| Find what broke | History, bisect |
+| Go back | Revert |
+| Work offline | Full copy on each machine |
+| Review before joining | Pull requests on top of Git |
+= How it helps maintenance
+" a Why is this line here?
+" b See the commit: bug 412, 2021.
+Software lives for decades and people leave. History answers why each line exists, and fixes can be copied to old releases.
+? What does Git keep that a shared folder does not? | Files | *The history of every change | Passwords
+
+# git-history | A short history of Git | Beginner | From locked files to distributed history.
+@h 1972 SCCS ; 1990 CVS ; 2000 Subversion ; 2005 Git ; 2008 GitHub ; 2018 Protocol v2 ; 2025 Towards 3.0
+= 1972 | HISTORY
+**SCCS** and later RCS keep versions of single files on one computer.
+= 1990 | HISTORY
+**CVS** lets a team share a central server.
+= 2000 | HISTORY
+**Subversion** fixes many CVS problems, still with one central server.
+= 2005 | HISTORY
+The Linux kernel lost free use of BitKeeper. In April 2005 Linus Torvalds starts **Git**: fast, distributed, safe against corruption. Junio Hamano has maintained it since July 2005.
+= 2008 | HISTORY
+**GitHub** opens. Sharing Git repositories becomes easy for everyone.
+= 2018 | HISTORY
+A new network protocol makes large repositories faster.
+= Now | HISTORY
+Git 3.0 is planned with `main` as default branch, SHA-256 for new repositories and a new reference format. Git is by far the most used version control system.
+? Why was Git written? | For websites | *The kernel lost its earlier tool | For games
+
+## Parts of Git
+# c-repo | Repository | Beginner | The folder with a memory.
+@@ user You ; db Repository ; folder Files ; doc .git
+= Without it | PROBLEM
+A normal folder only knows how things are now.
+= What it is | SOLUTION
+A **repository** is your project folder plus a hidden `.git` folder holding all history.
+= How it works
+$ git init
+$ git clone https://github.com/acme/shop.git
+`init` starts a new one; `clone` copies an existing one with all its history. A **bare** repository has no working files and is used on servers.
+= Real-time example | PRACTICE
+Your laptop is stolen. You buy a new one, clone, and have every version of the project again.
+? History is stored in... | the cloud only | *the .git folder | the first file
+
+# c-commit | Commit | Beginner | A saved point with a reason.
+@@ user Developer ; commit Commit ; db History ; card Message
+= Without it | PROBLEM
+Saving a file overwrites the last state, with no reason recorded.
+= What it is | SOLUTION
+A snapshot of the project plus author, date, message and link to the one before. Its name is a hash.
+= How it works
+$ git add app.js
+$ git commit -m "Fix refund of zero amount"
+You choose what goes in by staging first.
+= Real-time example | PRACTICE
+Small commits with one idea each made it possible to undo only the wrong change in a Friday release, and keep the other nine.
+? A good commit holds... | a week of work | *one idea | only comments
+
+# c-branch | Branch | Beginner | A separate line of work.
+@@ user Developer ; flag Branch ; db main ; commit Commits
+= Without it | PROBLEM
+Half-finished work sits in the same place as the version customers use.
+= What it is | SOLUTION
+A **branch** is a movable name for a commit. New commits move it forward; others are not disturbed.
+= How it works
+Make a branch, work on it, return to main and join it:
+$ git switch -c login
+$ git switch main
+$ git merge login
+= Real-time example | PRACTICE
+While a team builds a new checkout for two weeks on a branch, an urgent fix goes out from main the same day.
+? Creating a branch copies... | all files | *nothing, it adds a name | the server
+
+# c-merge | Merge and conflict | Beginner | Joining two lines of work.
+@@ commit Branch A ; gear Merge ; db main ; commit Branch B
+= Without it | PROBLEM
+Someone would have to copy changes by hand, line by line.
+= What it is | SOLUTION
+Git compares both sides with their common ancestor and joins them.
+= How it works
+If both changed the same lines, Git stops and marks a **conflict**. A person decides.
+> <<<<<<< HEAD
+> price = 10
+> =======
+> price = 12
+> >>>>>>> sale
+= Real-time example | PRACTICE
+Two people edit one price. The conflict makes them talk. Without it, one price would have silently won.
+? A conflict means... | Git is broken | *a person must choose | data is lost
+
+# c-remote | Remote | Beginner | The shared copy.
+@@ user You ; db Local repo ; cloud Remote ; user Teammate
+= Without it | PROBLEM
+Your commits exist only on your machine.
+= What it is | SOLUTION
+A **remote** is another copy of the repository, usually on GitHub or GitLab, called `origin`.
+= How it works
+$ git fetch
+$ git pull
+$ git push
+Fetch downloads, pull downloads and joins, push uploads.
+= Real-time example | PRACTICE
+A team in three countries works on one product; everyone pushes to the same remote and reviews each other's branches.
+? Upload commits with... | fetch | *push | init
+
+# c-head | HEAD, tags and .gitignore | Beginner | Where you are, names for releases, and what to leave out.
+@@ user You ; flag HEAD ; commit Commit ; flag Tag v1.0
+= Without them | PROBLEM
+You would not know which version you look at, or which commit customers received. Passwords and build files would be committed.
+= What they are | SOLUTION
+**HEAD** is where you are now. A **tag** is a fixed name for one commit. **.gitignore** lists files Git should leave alone.
+= How it works
+$ git tag -a v1.0 -m "First release"
+$ git show v1.0
+A branch moves; a tag stays.
+= Real-time example | PRACTICE
+A customer reports a bug in 1.0. `git switch --detach v1.0` shows exactly the code they have.
+? A tag is for... | daily work | *marking a release | secrets

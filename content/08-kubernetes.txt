@@ -1,0 +1,417 @@
+% kubectl | Kubernetes | #2f4fb3 | From one Pod to a secure, self-healing, autoscaled cluster with Helm.
+
+## Architecture
+# k8-why | Why Kubernetes | Beginner | Keeping many containers running on many machines.
+@ o user 0 0 Operator
+@ k gear 1 0 Kubernetes
+@ n1 server 2 0 Node 1
+@ n2 server 2 1 Node 2
+@ n3 server 2 2 Node 3
+= By hand | PROBLEM
+" o Which node runs what?
++ o n1 n2 n3
+~ o>n1 ssh ;; o>n2 ssh ;; !o>n3 forgot
+Fifty containers on ten machines: where does each run, what if a machine dies, how do you update without downtime?
+= Say what you want | SOLUTION
++ k
+~ o>k 3 replicas
+Kubernetes is **declarative**: you describe the desired state and it works to make it true.
+= It places work
+The scheduler looks at requested CPU and memory on each node and spreads the three copies across them.
+~ k>n1 ;; k>n2 ;; k>n3
+: n1 ok running
+: n2 ok running
+: n3 ok running
+= It heals
+: n2 err down
+~ k>n3 replace
+A node dies. The actual state no longer matches, so Kubernetes starts a replacement elsewhere.
+That loop, **observe, compare, act**, is the whole idea.
+= What it adds
+Scheduling, self-healing, service discovery, load balancing, rolling updates, scaling, configuration, storage.
+= When not to | PRACTICE
+A single small service may be better on a managed platform or one server with Compose. Kubernetes has a real operating cost.
+? Kubernetes is declarative. You describe... | each command | *the desired state | the hardware
+^ https://kubernetes.io/docs/concepts/overview/ Kubernetes docs
+
+# k8-arch | Cluster architecture | Beginner | Control plane and nodes, part by part.
+Z cp 0 0 2 2 Control plane
+Z nd 3 0 2 2 Node
+@ api gear 0 0 API server
+@ etcd db 0 1 etcd
+@ sch card 1 0 Scheduler
+@ cm gear 1 1 Controllers
+@ kl gear 3 0 kubelet
+@ kp router 3 1 kube-proxy
+@ pod pod 4 0 Pod
+@ cri box 4 1 Runtime
+= API server
++ cp api
+The front door. Every request goes through it and is authenticated, authorised, validated.
+= etcd
++ etcd
+~ api>etcd store
+A consistent key-value store that holds all cluster state. Only the API server talks to it. Back it up.
+= Scheduler
++ sch
+~ sch>api pick a node
+Watches for Pods without a node; filters nodes that fit, scores them, picks one.
+= Controllers
++ cm
+~ cm>api reconcile
+Loops that push actual state toward desired state: Deployment, ReplicaSet, Node, Job.
+= Node
++ nd kl cri pod
+~ api>kl pod spec ;; kl>cri start ;; cri>pod
+The **kubelet** makes the node's Pods match the spec using a runtime such as containerd.
+= Networking on the node
++ kp
+~ kp>pod route
+**kube-proxy** programs rules so Service addresses reach Pods. Some network plugins replace it with eBPF.
+? Which component stores cluster state? | Scheduler | *etcd | kubelet
+
+# k8-apply | What happens on kubectl apply | Intermediate | Following one request through the cluster.
+@ u laptop 0 0 kubectl
+@ api gear 1 0 API server
+@ e db 1 1 etcd
+@ dc gear 2 0 Deployment controller
+@ rs card 3 0 ReplicaSet
+@ s card 2 1 Scheduler
+@ k gear 3 1 kubelet
+@ p pod 4 1 Pod
+= Send
++ u api
+~ u>api Deployment
+$ kubectl apply -f deploy.yaml
+The API server checks **who you are**, **what you may do** (RBAC), then runs **admission**, which can change or reject the object.
+= Store
++ e
+~ api>e saved
+From here everything is asynchronous. Your command has already finished.
+= Controllers react
++ dc rs
+~ api>dc new Deployment ;; dc>rs create
+The Deployment controller makes a ReplicaSet; its controller makes Pods.
+= Schedule
+The scheduler sees a Pod with no node, chooses the best fit, and writes that choice back to the API server.
++ s
+~ api>s unscheduled Pod ;; s>api node 2
+= Run
++ k p
+~ api>k your Pod ;; k>p start
+: p ok Ready
+The kubelet pulls the image, sets up network and volumes, starts containers, runs probes.
+= Debug along the same path | PRACTICE
+: p warn Pending
+Pending: scheduling or volume. ImagePullBackOff: name or credentials. CrashLoopBackOff: the app exits.
+$ kubectl describe pod web-abc
+$ kubectl logs web-abc --previous
+$ kubectl get events --sort-by=.lastTimestamp
+? A Pod stays Pending. Look first at... | app logs | *scheduling events | the Service
+
+## Workloads
+# k8-pod | Pods and probes | Beginner | The smallest unit, and how it reports health.
+Z pz 1 0 2 2 Pod
+@ k gear 0 0 kubelet
+@ i small 1 1 Init container
+@ a box 1 0 App
+@ s box 2 0 Sidecar
+@ v bucket 2 1 Shared volume
+= One Pod
++ pz a
+A Pod is one or more containers that share an IP address and can share volumes. Usually one main container.
+= Sidecar
++ s v
+~ a>v logs ;; v>s read
+A helper in the same Pod: log shipper, proxy. They reach each other on `localhost`.
+= Init containers
++ i
+~ i>a then
+Run in order before the app. An init container with `restartPolicy: Always` is a native sidecar that keeps running.
+= Liveness
++ k
+~ !k>a liveness
+: a warn restarting
+Fails: the container is **restarted**. Keep it simple; never check the database here.
+= Readiness and startup
+~ k>a readiness
+: a ok Ready
+Readiness fails: no traffic, no restart. Startup probes give slow apps time before liveness begins.
+= Pods are temporary | PRACTICE
+* pz
+A bare Pod on a failed node is not replaced. Use a Deployment.
+? A failed readiness probe... | restarts the container | *stops traffic to the Pod | deletes the Pod
+
+# k8-deploy | Deployments and rollouts | Beginner | Replicas, updates and rollback.
+@ d board 0 0 Deployment
+@ r1 folder 1 0 ReplicaSet v1
+@ r2 folder 1 1 ReplicaSet v2
+@ a pod 2 0 v1
+@ b pod 3 0 v1
+@ c pod 2 1 v2
+@ e pod 3 1 v2
+= Replicas
+A Deployment manages a ReplicaSet, which manages Pods. You state how many copies you want and what each should look like.
++ d r1 a b
+~ d>r1 ;; r1>a ;; r1>b
+> apiVersion: apps/v1
+> kind: Deployment
+> metadata: { name: web }
+> spec:
+>   replicas: 2
+>   selector: { matchLabels: { app: web } }
+>   template:
+>     metadata: { labels: { app: web } }
+>     spec:
+>       containers: [{ name: web, image: "acme/web:1.0" }]
+= Heal
+: b err deleted
+~ r1>b new Pod
+Labels connect things. The ReplicaSet counts Pods that match its selector and fixes the number.
+= Update
++ r2 c
+~ d>r2 ;; r2>c
+$ kubectl set image deployment/web web=acme/web:2.0
+$ kubectl rollout status deployment/web
+A new ReplicaSet grows as the old shrinks. `maxSurge` and `maxUnavailable` set the pace.
+= Finish
+The last old Pod goes away only after the new one is Ready, so users never meet an empty service.
++ e
+x a b
+~ r2>e
+: c ok Ready
+: e ok Ready
+= Roll back
+~ d>r1 undo
+$ kubectl rollout undo deployment/web
+The old ReplicaSet was kept at zero, so this is quick. In GitOps, revert the commit instead.
+? What keeps the replica count right? | Service | *ReplicaSet | Ingress
+
+# k8-other | StatefulSet, DaemonSet, Job, CronJob | Intermediate | Workloads beyond stateless web servers.
+@ ss board 0 0 StatefulSet
+@ p0 db 1 0 db-0
+@ p1 db 2 0 db-1
+@ ds board 0 1 DaemonSet
+@ n1 pod 1 1 Node 1 agent
+@ n2 pod 2 1 Node 2 agent
+@ j board 0 2 Job
+@ c pod 1 2 Task
+= StatefulSet
++ ss p0 p1
+~ ss>p0 first ;; ss>p1 then
+Stable names (`db-0`), stable storage per Pod, ordered start. For databases and queues.
+= Storage follows
+: p0 ok disk 0
+: p1 ok disk 1
+If `db-1` moves, it gets the same volume back. Kubernetes does not replicate your data; the database must.
+= DaemonSet
++ ds n1 n2
+~ ds>n1 ;; ds>n2
+One Pod on every (matching) node: log collectors, node monitoring, network plugins.
+= Job
++ j c
+~ j>c run
+: c ok Completed
+Runs to completion with retries: migrations, reports.
+= CronJob
+~ j>c 02:00
+> schedule: "0 2 * * *"
+> concurrencyPolicy: Forbid
+Creates Jobs on a schedule. Make the task safe to run twice.
+? One log agent per node? | Deployment | *DaemonSet | CronJob
+
+## Networking and configuration
+# k8-svc | Services and DNS | Beginner | A steady address in front of changing Pods.
+@ c pod 0 0 Client Pod
+@ s router 1 0 Service
+@ a pod 2 0 web-1
+@ b pod 2 1 web-2
+@ d db 0 1 CoreDNS
+@ lb cloud 1 1 Load balancer
+= Pod IPs change | PROBLEM
+Each new Pod gets a new IP address. A client that remembered the old one now talks to nothing.
++ c a
+~ !c>a old IP
+: a err replaced
+= Service | SOLUTION
++ s b
+~ c>s ;; s>a ;; s>b
+: a ok
+A Service has a stable virtual IP and sends traffic to **ready** Pods that match its selector, tracked in EndpointSlices.
+= DNS
++ d
+~ c>d web.shop? ;; c>s
+`web` in the same namespace, or `web.shop.svc.cluster.local` in full.
+= Types
+* s
+**ClusterIP** inside only. **NodePort** a port on every node. **LoadBalancer** an external load balancer. **ExternalName** a DNS alias. **Headless** returns Pod IPs, used by StatefulSets.
+= From outside
++ lb
+~ lb>s
+One load balancer per Service gets expensive. Next lesson: Gateway.
+= No endpoints? | PRACTICE
+~ !s>b
+$ kubectl get endpointslices -l kubernetes.io/service-name=web
+Empty means labels do not match or Pods are not ready.
+? Service with no endpoints usually means... | etcd is down | *selector mismatch or Pods not ready | DNS cache
+
+# k8-gw | Ingress, Gateway API and NetworkPolicy | Intermediate | Getting traffic in, and keeping it out.
+@ u user 0 0 User
+@ g gate 1 0 Gateway
+@ r doc 2 0 HTTPRoute
+@ w pod 3 0 web
+@ a pod 3 1 api
+@ d db 4 1 db
+= Ingress
++ u g w
+~ u>g ;; g>w
+Ingress maps hosts and paths to Services and needs a controller. The API still works but is **frozen**.
+= What changed
+* g
+: g warn migrate
+The widely used **Ingress NGINX** controller was retired in March 2026: no more releases or security fixes. Kubernetes recommends **Gateway API**. Ingress2Gateway helps convert.
+$ kubectl get pods -A -l app.kubernetes.io/name=ingress-nginx
+= Gateway API
++ r a
+~ u>g ;; g>r ;; r>w / ;; r>a /api
+**GatewayClass** (who implements it), **Gateway** (listeners and TLS, owned by platform), **HTTPRoute** (routing, owned by app teams).
+= Traffic splitting
+~ r>w 90% ;; r>a 10%
+Weights, header matches and redirects are part of the standard.
+= Open by default | RISK
++ d
+~ !w>d
+Any Pod can reach any Pod unless you say otherwise.
+= NetworkPolicy
+* d
+: d ok api only
+~ a>d
+Start with default-deny, then allow. Your network plugin must support policies; without support they are silently ignored.
+? Recommended successor to Ingress? | NodePort | *Gateway API | kube-proxy
+^ https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/ Ingress NGINX retirement
+^ https://kubernetes.io/docs/concepts/services-networking/gateway/ Gateway API
+
+# k8-conf | ConfigMaps, Secrets and volumes | Intermediate | Settings and data for Pods.
+@ cm doc 0 0 ConfigMap
+@ se key 0 1 Secret
+@ p pod 1 0 Pod
+@ pvc card 2 0 PVC
+@ pv db 3 0 PV
+@ sc gear 3 1 StorageClass
+= ConfigMap
++ cm p
+~ cm>p env or file
+Non-secret settings, injected as variables or files. Files update later; environment variables need a restart.
+= Secret
++ se
+~ se>p
+Same idea for sensitive values. **Base64 is encoding, not encryption.** Turn on encryption at rest, limit RBAC, or use External Secrets.
+= Ask for storage
++ pvc
+~ p>pvc 10Gi
+A **PersistentVolumeClaim** is the request.
+= Get storage
++ pv sc
+~ pvc>sc ;; sc>pv create ;; pv>pvc bound
+The **StorageClass** tells a CSI driver to create a **PersistentVolume**.
+= Reclaim policy | RISK
+: pv warn Delete
+With `Delete`, removing the claim removes the disk. Use `Retain` for important data.
+Access modes: ReadWriteOnce (one node), ReadWriteOncePod, ReadOnlyMany, ReadWriteMany.
+? A Secret's base64 is... | encryption | *encoding only | a hash
+
+## Operating
+# k8-sched | Resources, scheduling and autoscaling | Advanced | Requests, limits, placement and scale.
+@ h gauge 0 0 HPA
+@ d board 1 0 Deployment
+@ a pod 2 0 Pod
+@ b pod 3 0 Pod
+@ n1 server 2 1 Node
+@ n2 server 3 1 New node
+= Requests and limits
++ d a n1
+~ d>a ;; a>n1
+**Requests** reserve and drive scheduling. **Limits** cap. Over the CPU limit: throttled. Over the memory limit: killed (OOMKilled).
+= Quality of service
+* a
+Guaranteed (requests equal limits), Burstable, BestEffort (none, evicted first).
+= Placement
+* n1
+**nodeSelector** and **affinity** attract. **Taints** repel unless a Pod has a **toleration**. **Topology spread** balances across zones.
+= Scale Pods
++ h b
+~ h>d more ;; d>b
+$ kubectl autoscale deployment web --min=2 --max=10 --cpu=70%
+The **HorizontalPodAutoscaler** adjusts replicas and needs metrics-server. VPA adjusts requests. KEDA scales on events.
+= Scale nodes
++ n2
+~ b>n2
+: n2 ok added
+Pods are Pending for lack of room, so Cluster Autoscaler or Karpenter adds a node.
+= Planned disruption
+* b
+A **PodDisruptionBudget** keeps enough replicas during drains.
+$ kubectl drain node-1 --ignore-daemonsets
+? Over the memory limit a container is... | throttled | *killed | moved
+
+# k8-sec | RBAC and Pod security | Advanced | Who may do what, and what Pods may do.
+@ u user 0 0 User
+@ sa key 0 1 ServiceAccount
+@ rb card 1 0 RoleBinding
+@ r doc 2 0 Role
+@ api gear 3 0 API server
+@ p pod 1 1 Pod
+= Role
++ r api
+A **Role** lists verbs on resources in one namespace. A **ClusterRole** is cluster-wide or reusable.
+= Binding
++ u rb
+~ u>rb ;; rb>r ;; r>api allowed
+A **RoleBinding** grants it to users, groups or ServiceAccounts. RBAC only adds; there is no deny.
+$ kubectl auth can-i delete pods --as ana -n shop
+= ServiceAccounts
++ sa p
+~ p>sa token ;; sa>rb
+Pods act as a ServiceAccount. Set `automountServiceAccountToken: false` when the app does not call the API.
+= Pod Security Standards
+* p
+: p ok restricted
+Namespace labels enforce **privileged**, **baseline** or **restricted**. Restricted asks for non-root, no privilege escalation, dropped capabilities.
+= User namespaces
+Root in the container maps to an unprivileged user on the node. GA since v1.36 on Linux.
+= Policy
+~ api>p admission
+CEL-based **ValidatingAdmissionPolicy** needs no webhook; Kyverno and Gatekeeper go further: "only signed images".
+!! `cluster-admin` for a CI job or an app is the most common serious mistake.
+? Can RBAC express deny? | Yes | *No, it only grants | Only for admins
+
+# k8-helm | Helm, Kustomize and operators | Advanced | Packaging and extending.
+@ c folder 0 0 Chart
+@ v doc 0 1 values.yaml
+@ h gear 1 0 Helm
+@ k gear 2 0 Cluster
+@ o gear 3 0 Operator
+@ d db 3 1 Database
+= Repetition | PROBLEM
++ c k
+Twelve YAML files per app, three environments. Copying them leads to drift.
+= Helm
++ h v
+~ c>h templates ;; v>h values ;; h>k release
+$ helm install shop ./chart -f prod.yaml
+$ helm upgrade shop ./chart -f prod.yaml
+$ helm rollback shop 1
+A **chart** is templates plus default values; an installed one is a **release**.
+= Helm 4
+* h
+Helm 4 (November 2025) uses **server-side apply** for new installs, while existing releases keep their earlier method unless you change it.
+= Kustomize
+* v
+$ kubectl apply -k overlays/prod
+A plain base plus patches per environment, no templates. Built into kubectl.
+= Operators
++ o d
+~ k>o custom resource ;; o>d manage
+A **CRD** adds a new kind such as `PostgresCluster`. An **operator** is a controller that knows how to run it: backups, failover, upgrades.
+? Operators are controllers for... | nodes only | *custom resources | Helm charts
+^ https://helm.sh/docs/overview/ Helm 4 overview

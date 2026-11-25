@@ -1,0 +1,65 @@
+% sdlc | Software Lifecycles | #c8432b | How software gets planned, built and improved: lifecycle models, Agile, Scrum, Kanban, Jira, and where DevOps fits.
+
+## DevOps
+# devops | What DevOps is | Beginner | Breaking the wall between making changes and keeping systems stable.
+@ dev team 0 0 Development
+@ wall gate 1 0 The wall
+@ ops team 2 0 Operations
+@ prod rack 3 0 Production
+@ fb gauge 2 1 Shared metrics
+@ pipe gear 1 1 Pipeline
+= Two opposite goals | PROBLEM
++ dev ops prod wall
+" dev New version! Over to you.
+w !dev>ops 90 changes
+" ops It worked before you touched it.
+Developers are rewarded for change. Operations is rewarded for stability. So releases get rare, large and frightening.
+= One team, one goal | SOLUTION
+x wall
++ fb pipe
+" ops Let us build the pipeline together.
+w dev>pipe commit
+w ops>pipe deploy rules
+~ pipe>prod deploy
+DevOps joins people, process and tools so the same group owns a change from idea to production.
+= The Three Ways
+~ pipe>prod flow ;; prod>fb signals ;; fb>dev learn
+**Flow**: make work move quickly from left to right, in small batches. **Feedback**: send information back fast. **Continual learning**: experiment, and learn from failure without blame.
+= CALMS
+* dev ops
+" dev I am on call this week too.
+" ops Then I review your alerts.
+**C**ulture, **A**utomation, **L**ean, **M**easurement, **S**haring. Buying a tool gives you only the A.
+= The infinity loop
+~ dev>pipe build ;; pipe>prod release ;; prod>fb monitor ;; fb>dev plan
+Plan, code, build, test, release, deploy, operate, monitor, and again. The rest of this course follows that loop.
+? Which is NOT a part of CALMS? | Culture | *Certification | Sharing
+
+# dora | Measuring delivery with DORA | Intermediate | Five metrics that show speed and stability together.
+@ c commit 0 0 Commit
+@ p gear 1 0 Pipeline
+@ prod rack 2 0 Production
+@ t gauge 1 1 Throughput
+@ i gauge 2 1 Instability
+= Speed versus safety? | PROBLEM
++ c p prod
+~ c>p ;; p>prod
+People assume faster delivery means more failures. DORA's research over many years found that strong teams do well on both.
+= Throughput
++ t
+* t
+~ c>prod lead time
+**Change lead time**: commit to production. **Deployment frequency**: how often you deploy. **Failed deployment recovery time**: how fast you recover from a deployment that needs immediate intervention.
+= Instability
++ i
+* i
+~ !p>prod fails
+**Change failure rate**: share of deployments needing immediate intervention. **Deployment rework rate**: share of deployments that are unplanned fixes for a production incident.
+= Use them well | PRACTICE
+Measure one service at a time, watch the trend, improve the biggest constraint.
+!! Turning a metric into a target for individuals makes people game it. These describe a system, not a person.
+= How to improve
+~ c>p small batch ;; p>prod automated
+Smaller batches help almost every metric: easier review, easier testing, easier rollback.
+? Commit-to-production time is called... | Deployment frequency | *Change lead time | Rework rate
+^ https://dora.dev/guides/dora-metrics/ DORA metrics guide

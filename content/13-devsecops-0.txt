@@ -1,0 +1,148 @@
+% devsecops | DevSecOps | #3b4a54 | Why security joins delivery, each idea on its own, then pipelines, secrets and the supply chain.
+
+## Introduction
+# ds-why | Why DevSecOps exists | Beginner | Security at the end is too late.
+@ d team 0 0 Dev team
+@ s user 1 0 Security engineer
+@ p gear 1 1 Pipeline
+@ r rack 2 0 Production
+@ a user 3 0 Attacker
+= The gate at the end | PROBLEM
++ d s r
+w d>s finished product
+" s 80 problems. Launch is tomorrow.
+w !s>d all back
+Security looked once, just before launch. Fixing late is slow and expensive, so problems are often accepted.
+= Too fast for a gate | PROBLEM
++ a
+~ !a>r known hole
+" d We deploy ten times a day.
+Teams release daily, and one security person cannot read everything. Attackers scan the internet all day.
+= Security in every step | SOLUTION
++ p
+~ d>p commit ;; p>r checked
+" s The pipeline tells you in minutes.
+: p ok scans pass
+: r ok
+Automatic checks run with each change; security engineers become advisers who build safe paths for everyone.
+= How it helps
+| Step | Check |
+| Plan | Threat model |
+| Code | Secret scan, SAST |
+| Build | Dependencies, image scan |
+| Test | DAST |
+| Deploy | Policy, signatures |
+| Run | Detection, patching |
+= In maintenance
+" s A hole in a library: 14 apps use it.
+With a list of components you know in minutes what to fix.
+? DevSecOps moves security... | to the end | *into every step | outside
+
+# ds-history | A short history of secure delivery | Beginner | Lessons paid for by incidents.
+@h 1988 Morris worm ; 2001 OWASP ; 2004 SDL ; 2014 Heartbleed ; 2017 Equifax ; 2020 SolarWinds ; 2021 Log4Shell ; 2024 XZ
+= 1988 | HISTORY
+The **Morris worm** spreads across the early internet; the first CERT is founded.
+= 2001 | HISTORY
+**OWASP** starts sharing web security knowledge; its Top 10 follows.
+= 2004 | HISTORY
+Microsoft makes its **Security Development Lifecycle** mandatory.
+= 2014 | HISTORY
+**Heartbleed** in OpenSSL: a tiny error in a library the whole internet used.
+= 2017 | HISTORY
+**Equifax**: a known hole left unpatched exposes data of about 147 million people.
+= 2020 | HISTORY
+**SolarWinds**: attackers change the build of a trusted product.
+= 2021 | HISTORY
+**Log4Shell**: many teams do not know where they use Log4j. SBOMs become important.
+= 2024 | HISTORY
+**XZ Utils**: a backdoor placed by a patient contributor is found by chance before wide release.
+? What did Log4Shell teach? | Use one language | *Know your components | Stop testing
+
+## Ideas one by one
+# c-cia | Confidentiality, integrity, availability | Beginner | The three things security protects.
+@@ user Attacker ; shield CIA ; db Data ; team Users
+= Without it | PROBLEM
+Data is read, changed or blocked by the wrong people.
+= What it is | SOLUTION
+**Confidentiality**: only the right people read. **Integrity**: nobody changes it unnoticed. **Availability**: it is there when needed.
+= How it works
+| Goal | Tools |
+| Confidentiality | Encryption, access control |
+| Integrity | Hashes, signatures, reviews |
+| Availability | Backups, spare capacity |
+= Real-time example | PRACTICE
+Hospital records: leaked (C), altered (I) or locked by ransomware (A). Each needs its own protection.
+? Ransomware mainly breaks... | integrity of code | *availability | speed
+
+# c-auth | Authentication and authorization | Beginner | Who are you, and what may you do?
+@@ user Person ; gate Login ; db System ; key Second factor
+= Without it | PROBLEM
+Anyone can act as anyone.
+= What it is | SOLUTION
+**Authentication** proves who you are. **Authorization** decides what you may do.
+= How it works
+Password plus a second factor (**MFA**), or a passkey. Then roles give rights.
+= Real-time example | PRACTICE
+A password is stolen. MFA stops the login and alerts the user.
+? "May you delete this?" is... | authentication | *authorization | encryption
+
+# c-least | Least privilege and zero trust | Beginner | Only what is needed, checked each time.
+@@ user Attacker ; shield Small rights ; db Data ; server App
+= Without it | PROBLEM
+One stolen account can do everything.
+= What it is | SOLUTION
+Give each person and program only what its job needs. **Zero trust**: being inside the network is not a reason to be trusted.
+= How it works
+Roles, short-lived access, network rules, regular reviews.
+= Real-time example | PRACTICE
+A stolen CI token could only upload one package, so the damage was one package.
+? Zero trust means... | trust nobody ever | *verify each request | no passwords
+
+# c-cve | Vulnerability, CVE, CVSS | Beginner | Names and scores for weaknesses.
+@@ user Researcher ; card CVE ; server Your app ; gauge CVSS
+= Without it | PROBLEM
+" a There is a hole in that thing.
+Nobody knows which hole, which version, or how bad.
+= What it is | SOLUTION
+A **CVE** number names one public weakness. **CVSS** scores its severity from 0 to 10.
+= How it works
+Scanners compare your components with the list. Also look at **exploitation**: EPSS and CISA's KEV list show what is really attacked.
+= Real-time example | PRACTICE
+Of 300 findings, 6 are on the KEV list and reachable. Those are fixed today, the rest are planned.
+? CVSS is a... | name | *severity score | scanner
+
+# c-owasp | Common web weaknesses | Beginner | The mistakes found again and again.
+@@ user Attacker ; doc Input ; server Web app ; shield Defence
+= Without knowing them | PROBLEM
+Teams repeat the same mistakes for twenty years.
+= What they are | SOLUTION
+The **OWASP Top 10** lists the most important risks for web applications.
+= How they work
+| Weakness | Defence |
+| Broken access control | Check rights on the server |
+| Injection | Parameterised queries |
+| Cross-site scripting | Escape output |
+| Misconfiguration | Safe defaults, scans |
+| Old components | Update, SCA |
+| Weak login | MFA, rate limits |
+= Real-time example | PRACTICE
+Changing `order=1001` to `1002` showed a stranger's order. The fix: check the owner on the server for each request.
+? Best against SQL injection? | Longer passwords | *Parameterised queries | A bigger server
+^ https://owasp.org/www-project-top-ten/ OWASP Top 10
+
+# c-scan | SAST, SCA, DAST, secret scanning | Intermediate | Four kinds of automatic checks.
+@@ user Developer ; gear Scanners ; box Release ; doc Report
+= Without them | PROBLEM
+Mistakes pass because people are tired.
+= What they are | SOLUTION
+| Check | Looks at |
+| SAST | Your source code |
+| SCA | Libraries you use |
+| DAST | The running app |
+| Secret scan | Keys in code |
+| IaC scan | Cloud settings |
+= How they work
+Run fast ones on each pull request, slow ones at night. Block only on serious, sure findings.
+= Real-time example | PRACTICE
+A secret scan stops a cloud key before it leaves the laptop: a problem that never happened.
+? Which checks libraries? | SAST | *SCA | DAST

@@ -1,0 +1,274 @@
+% aws | AWS | #b5651d | Accounts and IAM, networking, compute, storage, databases, containers, serverless, operations and cost.
+
+## Foundations
+# aws-what | Cloud and the AWS map | Beginner | Regions, zones and who is responsible for what.
+Z r 0 0 3 2 Region
+@ a rack 0 0 Zone a
+@ b rack 1 0 Zone b
+@ c rack 2 0 Zone c
+@ e cloud 1 -1 Edge location
+@ u user 0 -1 User
+@ app box 1 1 Your app
+= What cloud means
++ u
+Rent computing on demand by API, pay for what you use, give it back. **IaaS** machines, **PaaS** platforms, **SaaS** finished software.
+= Regions and zones
++ r a b c
+A **Region** is a geographic area. It holds several **Availability Zones**: separate data centres with own power, joined by fast links.
+= Survive a zone
++ app
+: b err down
+~ u>a
+: a ok serving
+: c ok serving
+Run in at least two zones. A single-zone system fails with its zone.
+= Edge
++ e
+~ u>e near ;; e>b miss
+CloudFront and Route 53 answer from locations near users.
+= Shared responsibility
+* app
+AWS secures the cloud: buildings, hardware, managed service software. You secure what is **in** it: data, access, configuration, guest OS on EC2.
+= Free plan
+For accounts opened since July 2025: up to $200 in credits, and a free plan that lasts 6 months or until credits run out. Set a budget alert on day one.
+? Who patches the OS on your EC2 instance? | AWS | *You | Nobody
+^ https://aws.amazon.com/free/ AWS Free Tier
+
+# aws-iam | IAM: identities and permissions | Beginner | Users, roles, policies and how a request is judged.
+@ u user 0 0 Person
+@ ro key 1 0 Role
+@ p doc 1 1 Policy
+@ ev gate 2 0 IAM check
+@ s bucket 3 0 S3 bucket
+@ ec server 0 1 EC2 app
+= Root | RISK
++ u
+: u err root
+The root user can do everything. Turn on MFA, make no access keys, use it almost never.
+= Policies
+A policy is JSON: which actions, on which resources, under which conditions. It is attached to a user, group, role or resource.
++ p ev s
+~ u>ev GetObject? ;; ev>p check ;; ev>s allow
+> { "Effect": "Allow", "Action": "s3:GetObject",
+>   "Resource": "arn:aws:s3:::acme-logs/*" }
+= How it decides
+* ev
+Everything is denied by default. An explicit **Allow** permits. An explicit **Deny** always wins.
+= Roles
++ ro ec
+~ ec>ro assume ;; ro>ev temporary keys
+A role gives temporary credentials. Attach roles to EC2, Lambda or pods instead of storing access keys.
+= People
+~ u>ro sign in
+Use IAM Identity Center with your company login. Avoid long-lived IAM user keys.
+= Least privilege | PRACTICE
+* p
+Start narrow. IAM Access Analyzer can suggest policies from real use. Organizations add **SCPs** as guardrails across accounts.
+? Allow and Deny both match. Result? | Allow | *Deny | Depends on order
+
+# aws-vpc | VPC networking | Intermediate | Subnets, routes, gateways and firewalls.
+Z v 1 0 3 2 VPC 10.0.0.0/16
+@ i cloud 0 0 Internet
+@ gw gate 1 0 Internet gateway
+@ lb router 2 0 Load balancer
+@ nat router 2 1 NAT gateway
+@ app server 3 0 App (private)
+@ db db 3 1 DB (private)
+= A private network
++ v
+A VPC is your own network in a Region. Split it into subnets; each subnet lives in one zone.
+= Public subnet
++ i gw lb
+~ i>gw ;; gw>lb
+A subnet is public when its route table sends `0.0.0.0/0` to an **internet gateway**.
+= Private subnet
++ app db
+~ lb>app ;; app>db
+Apps and databases have no route from the internet.
+= Going out
++ nat
+~ app>nat updates ;; nat>gw
+A NAT gateway lets private machines start connections out. It costs per hour and per GB; a gateway endpoint for S3 avoids much of it.
+= Security groups and NACLs
+* app db
+: db ok from app only
+**Security groups** are stateful, allow-only, on the interface. **Network ACLs** are stateless, on the subnet, with allow and deny.
+= Connecting networks
+* v
+Peering (two VPCs), Transit Gateway (many), PrivateLink (one service privately), VPN or Direct Connect (your office).
+? What makes a subnet public? | Its name | *A route to an internet gateway | A security group
+
+## Core services
+# aws-ec2 | EC2, load balancing, auto scaling | Beginner | Servers that come and go with demand.
+@ u team 0 0 Users
+@ lb router 1 0 ALB
+@ a server 2 0 EC2
+@ b server 2 1 EC2
+@ asg gear 3 0 Auto Scaling
+@ cw gauge 3 1 CloudWatch
+= An instance
++ a
+Choose an **AMI** (disk image), **instance type** such as `t4g.small`, subnet, security group and IAM role. User data runs at first boot.
+= Connect
+* a
+Session Manager gives a shell with no open SSH port and records it.
+= Load balancer
++ u lb b
+~ u>lb ;; lb>a ;; lb>b
+**ALB** works with HTTP paths and hosts. **NLB** with TCP and UDP at very high rates. Health checks remove bad targets.
+= Auto Scaling
++ asg cw
+~ cw>asg CPU 80% ;; asg>b add
+Keeps the group between min and max and replaces unhealthy instances. Target tracking: "keep CPU near 50%".
+= Paying
+On-Demand is flexible. Savings Plans commit for a discount. **Spot** is far cheaper and can be taken back with two minutes' notice.
+= Lambda or EC2?
+* a
+Before running servers, ask whether a managed service fits.
+? Spot instances can be... | never stopped | *reclaimed on short notice | only for databases
+
+# aws-store | S3, EBS and EFS | Beginner | Object, block and file storage.
+@ app server 0 0 App
+@ s3 bucket 1 0 S3
+@ ebs db 1 1 EBS
+@ efs folder 0 1 EFS
+@ gl box 2 0 Glacier classes
+= S3
++ app s3
+~ app>s3 PUT
+Objects in buckets, reached by HTTP. Designed for 99.999999999% durability.
+$ aws s3 cp report.pdf s3://acme-docs/2026/
+= EBS
++ ebs
+~ app>ebs disk
+A network disk for an instance, in one zone. Snapshots are stored regionally.
+= EFS
++ efs
+~ app>efs share
+A Linux file system many instances mount together.
+= Life cycle
++ gl
+~ s3>gl after 90 days
+Rules move old objects to cheaper classes or delete them. Cheaper classes can have retrieval fees and delays.
+= Keep it private | RISK
+* s3
+: s3 ok blocked public
+Block Public Access is on for new buckets. Share with pre-signed URLs or CloudFront. Versioning and Object Lock protect against deletion.
+? Disk for one database server? | S3 | *EBS | Glacier
+
+# aws-db | Databases and messaging | Intermediate | RDS, DynamoDB, cache, queues and events.
+@ app server 0 1 App
+@ rds db 1 0 RDS primary
+@ sb db 2 0 Standby
+@ dy db 1 1 DynamoDB
+@ q queue 1 2 SQS
+@ w gear 2 2 Worker
+= RDS and Aurora
++ app rds
+~ app>rds SQL
+Managed PostgreSQL, MySQL and others: patching, backups, point-in-time restore.
+= Multi-AZ
++ sb
+~ rds>sb copy
+: rds err failed
+: sb ok promoted
+A standby in another zone takes over. **Read replicas** are for scaling reads, a different purpose.
+= DynamoDB
++ dy
+~ app>dy key
+Key-value at any scale. Design the partition key around your queries.
+= SQS and SNS
++ q w
+~ app>q order ;; q>w pull
+**SQS** holds messages until processed; failures go to a dead-letter queue. **SNS** pushes to many. **EventBridge** routes by rules.
+= At least once | PRACTICE
+* w
+Standard queues may deliver twice. Make workers idempotent.
+? Multi-AZ standby is mainly for... | faster reads | *availability | cheaper storage
+
+## Building on AWS
+# aws-cont | Containers: ECR, ECS, EKS | Intermediate | Three ways to run images.
+@ ci gear 0 0 CI
+@ ecr bucket 1 0 ECR
+@ ecs board 2 0 ECS
+@ eks pod 2 1 EKS
+@ f cloud 3 0 Fargate
+@ n server 3 1 EC2 nodes
+= ECR
++ ci ecr
+~ ci>ecr push
+A private image registry with scanning and life cycle rules.
+= ECS
++ ecs
+~ ecr>ecs
+Amazon's own orchestrator. **Task definition** (what), **task** (running copy), **service** (keep N running).
+= Fargate
++ f
+~ ecs>f run
+No servers to manage: pay per task CPU and memory.
+= EKS
++ eks n
+~ ecr>eks ;; eks>n
+Managed Kubernetes control plane. Nodes by managed groups, Karpenter, Auto Mode or Fargate. Give pods AWS access with Pod Identity.
+= Which? | PRACTICE
+Want simple: ECS on Fargate. Need Kubernetes tooling: EKS. App Runner stopped taking new customers on 30 April 2026; AWS points to **ECS Express Mode**.
+? Runs tasks without managing servers? | ECR | *Fargate | EC2
+^ https://docs.aws.amazon.com/apprunner/latest/dg/apprunner-availability-change.html App Runner availability change
+
+# aws-less | Serverless | Intermediate | Lambda, API Gateway and Step Functions.
+@ u user 0 0 User
+@ g gate 1 0 API Gateway
+@ l small 2 0 Lambda
+@ l2 small 2 1 Lambda
+@ d db 3 0 DynamoDB
+@ s board 1 1 Step Functions
+= No servers to run
++ u g l d
+~ u>g ;; g>l ;; l>d
+Code runs on a request and you pay per use. Nothing runs when nobody calls.
+= Scaling
++ l2
+~ g>l ;; g>l2
+Each concurrent request gets its own environment.
+= Cold start
+: l2 warn cold
+A new environment takes time to start. Smaller packages help; provisioned concurrency removes it for a price.
+= Limits
+* l
+Up to 15 minutes per run and 10 GB memory. Set timeouts and reserved concurrency so one function cannot use the whole account's share.
+= Workflows
++ s
+~ s>l step 1 ;; s>l2 step 2
+Step Functions coordinates with retries and waiting.
+= Deploy
+AWS SAM, CDK or Terraform; shift traffic gradually with aliases.
+? Longest single Lambda run? | 5 min | *15 min | 1 hour
+
+# aws-ops | Monitoring, security and cost | Advanced | Operating an account well.
+@ app server 0 0 Workload
+@ cw gauge 1 0 CloudWatch
+@ ct doc 1 1 CloudTrail
+@ gd shield 2 1 GuardDuty
+@ c board 2 0 Cost Explorer
+@ al flag 3 0 Alarm
+= Metrics and logs
++ app cw al
+~ app>cw ;; cw>al
+CloudWatch collects metrics and logs and raises alarms. Set log retention, or logs stay forever.
+= Who did it
++ ct
+~ app>ct API calls
+CloudTrail records API activity. Send it to a separate, locked account.
+= Detect
++ gd
+~ ct>gd
+GuardDuty looks for threats. Security Hub gathers findings. Config tracks resource changes.
+= Cost
++ c
+: c warn NAT + idle
+Tag everything. Budgets and anomaly detection warn early. Usual waste: idle instances, unattached disks, NAT traffic, old snapshots.
+= Well-Architected | PRACTICE
+Six pillars: operational excellence, security, reliability, performance efficiency, cost optimisation, sustainability.
+= Infrastructure as code
+CloudFormation and **CDK** are AWS's own; Terraform works across providers. CodePipeline, CodeBuild and CodeDeploy form AWS's CI/CD. CodeCommit returned to general availability after a pause.
+? Which service records API calls? | CloudWatch | *CloudTrail | GuardDuty

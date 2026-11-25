@@ -1,0 +1,361 @@
+% aws | AWS | #b5651d | Why the cloud exists, every core service on its own, then how they work together in real systems.
+
+## Introduction
+# aws-why | Why AWS exists | Beginner | What companies did before the cloud, and what changed.
+@ f user 0 0 Founder
+@ it user 1 0 IT engineer
+@ dc rack 2 0 Own servers
+@ aws cloud 2 1 AWS
+@ u team 3 0 Users
+= Before the cloud | PROBLEM
++ f it dc
+" f We launch in two weeks!
+" it Servers arrive in three months.
+w !f>it order
+: dc err waiting
+To run a website you bought servers, found a room with power, cooling and network, and hired people to look after them, before the first customer came.
+= Guessing capacity | PROBLEM
++ u
+~ !u>dc sale day
+: dc err overloaded
+" it Buy ten more? They sleep all year.
+Buy too little and the site falls over on sale day. Buy for sale day and most machines do nothing for the rest of the year.
+= Rent it by the hour | SOLUTION
++ aws
+w it>aws API call
+~ aws>u serving
+: aws ok ready in minutes
+AWS owns the data centres. You ask for a server, storage or database through a web page or API, get it in minutes, pay for what you use, and give it back.
+= What it solves
+| Problem | Answer |
+| Large cost before starting | Pay as you go |
+| Months of waiting | Minutes |
+| Guessing capacity | Scale up and down |
+| One location | Regions around the world |
+| Hardware repairs | Done by AWS |
+= How it helps software grow
+" f Try it, measure, keep or delete.
+Trying an idea became cheap. A student can use the same building blocks as a bank. Teams spend time on their product instead of on cables. This is why start-ups, streaming services and governments use it.
+= What it does not solve | RISK
+: dc warn still your job
+You still design, secure and pay. A server left on costs money; a bucket left open leaks data. Cloud makes both good and bad decisions fast.
+Azure and Google Cloud offer the same kind of service.
+? What problem does pay-as-you-go remove? | Bugs | *Large cost before you start | The need for security
+^ https://aws.amazon.com/what-is-cloud-computing/ AWS: What is cloud computing
+
+# aws-history | A short history of AWS | Beginner | From an internal need to a global platform.
+@h 2004 SQS first shown ; 2006 S3 and EC2 ; 2009 VPC and RDS ; 2012 DynamoDB ; 2014 Lambda ; 2018 EKS ; 2025 New free plan
+= 2004 to 2006 | HISTORY
+Amazon had learned to run shared infrastructure for its own shops. It introduced a queue service (SQS) in November 2004.
+= 2006: S3 and EC2 | HISTORY
+**S3** launched on 14 March 2006 as the first generally available service. **EC2** followed months later: servers by the hour.
+= 2009: networks and databases | HISTORY
+**VPC** gave private networks; **RDS** gave managed databases.
+= 2012 | HISTORY
+**DynamoDB**, a managed key-value database for very large traffic.
+= 2014 | HISTORY
+**Lambda** announced: run code without managing servers.
+= 2018 | HISTORY
+Managed Kubernetes (**EKS**) becomes generally available.
+= Today | HISTORY
+Accounts opened since July 2025 get a credit-based free plan. The catalogue holds hundreds of services, but a small set carries most systems. The next chapters take those one at a time.
+? First generally available AWS service? | EC2 | *S3 | Lambda
+^ https://aws.amazon.com/blogs/aws/twenty-years-of-amazon-s3-and-building-whats-next/ Twenty years of Amazon S3
+^ https://aws.amazon.com/about-aws/our-origins/ AWS: Our origins
+
+## Identity and security services
+# c-iam | IAM: who may do what | Beginner | The service every other service asks first.
+@@ user Employee ; gate IAM ; db Company data ; doc Policy
+= If IAM did not exist | PROBLEM
+" a I just wanted to look.
+Everyone would share one all-powerful login. A trainee could delete the database by mistake, and nobody could tell who did it. One leaked password would mean losing everything.
+= What it is | SOLUTION
+**Identity and Access Management** checks every request: who are you, and are you allowed to do this? It has no extra charge.
+= How it solves it
+| Part | Meaning |
+| User | One person or program with long-term keys |
+| Group | A set of users, for example Developers |
+| Role | Temporary permissions anyone trusted can take on |
+| Policy | JSON text that allows or denies actions |
+Everything is denied until a policy allows it. An explicit deny always wins.
+= Real-time example | PRACTICE
+A shop has three groups: Developers may change test servers, Finance may read bills, Support may read orders. The web server has a **role** that lets it read one bucket, so no password is stored on it.
+= Rules to keep | RISK
+MFA on the root user, no root access keys, roles instead of keys, the least permission that works.
+? A server needs to read a bucket. Give it... | the root password | *a role | a user's keys
+^ https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html IAM User Guide
+
+# c-kms | KMS and Secrets Manager | Intermediate | Locking data, and keeping passwords out of code.
+@@ server App ; key KMS / Secrets ; db Encrypted data ; doc Audit log
+= Without it | PROBLEM
+Database passwords sit in code and configuration files. A stolen disk or backup can be read by anyone.
+= What they are | SOLUTION
+**KMS** creates and guards encryption keys; the key material does not leave it unencrypted. **Secrets Manager** stores passwords and can rotate them. **Parameter Store** is a simpler place for settings.
+= How it works
+The app asks with its role, IAM checks, KMS decrypts. Each use is recorded in CloudTrail.
+= Real-time example | PRACTICE
+A clinic encrypts its patient database with its own KMS key. When an employee leaves, rights to use the key are removed, and copied data becomes unreadable for them.
+? Where should a database password live? | In the code | *Secrets Manager | In a wiki
+
+## Compute services
+# c-ec2 | EC2: virtual servers | Beginner | A computer you rent.
+@@ user Developer ; server EC2 instance ; team Visitors ; layer AMI
+= Without it | PROBLEM
+" a I need a server today, for a week.
+You would have to buy a machine, wait for it, install it, and keep paying after the project ends.
+= What it is | SOLUTION
+**Elastic Compute Cloud** gives you virtual servers, called instances, with the CPU, memory and system you choose, billed while they run.
+= How it works
+An **AMI** is the starting disk image. The **instance type** is the size. A **key pair** or Session Manager lets you in. A **security group** is its firewall. **EBS** is its disk.
+$ aws ec2 run-instances --image-id ami-123 --instance-type t4g.small
+= Real-time example | PRACTICE
+A school runs its exam portal on two instances. In exam week it starts six more, then stops them.
+= When not to use it
+You must patch and watch it. For short tasks use Lambda; for containers, Fargate.
+? What is an AMI? | A firewall | *A starting disk image | A price
+
+# c-asg | Auto Scaling | Beginner | The right number of servers, all the time.
+@@ team Visitors ; gear Auto Scaling ; server Servers ; gauge CloudWatch
+= Without it | PROBLEM
+At 3 a.m. traffic doubles. Someone has to wake up and add servers, or users see errors.
+= What it is | SOLUTION
+An **Auto Scaling group** keeps the number of instances between a minimum and a maximum and replaces broken ones.
+= How it works
+A **launch template** says what to start. **CloudWatch** measures. A **policy** such as "keep CPU near 50%" adds or removes.
+= Real-time example | PRACTICE
+A food delivery company has 4 servers in the afternoon, 20 at dinner time, 4 again at midnight, without anyone touching it.
+? What replaces a broken instance? | You, by hand | *The Auto Scaling group | S3
+
+# c-elb | Elastic Load Balancing | Beginner | One address, many servers.
+@@ team Visitors ; router Load balancer ; server Server 1 ; server Server 2
+= Without it | PROBLEM
+All visitors go to one server. It is overloaded, and when it fails the site is gone.
+= What it is | SOLUTION
+A load balancer takes every request and passes it to a healthy server.
+= How it works
+It calls a **health check** on each target and stops using those that fail.
+| Type | For |
+| ALB | HTTP: paths, hosts |
+| NLB | TCP, UDP, very high rates |
+| GWLB | Network appliances |
+= Real-time example | PRACTICE
+A news site sends `/api` to one group of servers and everything else to another, and updates one server at a time without downtime.
+? What does a health check do? | Encrypts | *Finds targets that must not get traffic | Scales the database
+
+# c-lambda | Lambda: code without servers | Intermediate | Run a function when something happens.
+@@ user User ; small Lambda ; db Result ; flag Event
+= Without it | PROBLEM
+A server runs all day to resize ten photos. You pay for 24 hours and patch it too.
+= What it is | SOLUTION
+**Lambda** runs your function when an event arrives and bills for the time it runs.
+= How it works
+Events come from S3, API Gateway, SQS, a schedule and more. Each run has up to 15 minutes. Many events run in parallel.
+= Real-time example | PRACTICE
+A travel site: each uploaded photo triggers a function that makes three sizes. On quiet days the cost is close to nothing.
+= When not to use it
+Long jobs, steady heavy traffic, or special hardware are often cheaper or simpler on containers.
+? Longest single run? | 1 minute | *15 minutes | 1 day
+
+# c-ecs | ECR, ECS, Fargate and EKS | Intermediate | Where containers live and run.
+@@ gear CI ; bucket ECR ; board ECS or EKS ; cloud Fargate
+= Without them | PROBLEM
+You have twenty container images on laptops and start them by hand on servers. Nobody knows which version runs where.
+= What they are | SOLUTION
+**ECR** stores images. **ECS** runs containers the AWS way. **EKS** is managed Kubernetes. **Fargate** runs containers with no servers to manage.
+= How they fit
+CI pushes to ECR. A service in ECS or EKS keeps the wanted number of copies running and replaces failed ones.
+= Real-time example | PRACTICE
+A team of five uses ECS on Fargate. A company with forty services and Kubernetes skills uses EKS.
+? Which one stores images? | ECS | *ECR | Fargate
+
+# c-beanstalk | Elastic Beanstalk and Lightsail | Beginner | The simple ways to start.
+@@ user Beginner ; gear Beanstalk ; server Running app ; router Load balancer
+= Without it | PROBLEM
+" a I only want my app online.
+A beginner must learn networks, servers and load balancers before seeing a page.
+= What it is | SOLUTION
+**Elastic Beanstalk** takes your code and creates servers, load balancer and scaling for you. **Lightsail** offers small servers at a fixed monthly price.
+= How it works
+You upload a version; it deploys, monitors and can roll back. The resources are normal EC2 and ELB that you can see.
+= Real-time example | PRACTICE
+A student puts a project online with Lightsail. A small company runs its internal portal on Beanstalk and later moves to ECS.
+? Beanstalk creates... | hidden machines | *normal AWS resources for you | only storage
+
+## Storage services
+# c-s3 | S3: object storage | Beginner | Files of any amount, reachable by name.
+@@ user User ; bucket S3 bucket ; doc Files ; box Cheaper classes
+= Without it | PROBLEM
+Files fill the server's disk. If the server dies, the photos are gone. A second server cannot see them.
+= What it is | SOLUTION
+**Simple Storage Service** keeps objects (file plus information) in buckets. It is designed for 99.999999999% durability by storing copies in several zones.
+= How it works
+Each object has a **key** such as `2026/invoice-7.pdf`. **Versioning** keeps old copies. **Lifecycle rules** move old ones to cheaper classes. **Policies** say who may read.
+$ aws s3 cp invoice-7.pdf s3://acme-docs/2026/
+= Real-time example | PRACTICE
+A university stores lecture videos. New ones are in Standard; after 90 days they move to Infrequent Access, after two years to Glacier.
+= Dangers | RISK
+A public bucket is a classic leak. Keep Block Public Access on and share through CloudFront or signed links.
+? S3 stores... | running programs | *objects in buckets | network rules
+^ https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html S3 User Guide
+
+# c-ebs | EBS and EFS: disks and shared files | Beginner | The disk of one server, or a folder for many.
+@@ server Server ; db EBS disk ; folder EFS share ; bucket Snapshot
+= Without them | PROBLEM
+Data on an instance's temporary store disappears when the instance stops.
+= What they are | SOLUTION
+**EBS** is a network disk for an instance in one zone. **EFS** is a file system that many Linux servers mount together.
+= How it works
+An EBS **snapshot** copies a disk for backup or for another zone. You pick the type by speed: gp3 for general use, io2 for demanding databases.
+= Real-time example | PRACTICE
+A database server keeps data on EBS with nightly snapshots. Ten web servers share uploaded pictures through EFS.
+| Need | Use |
+| Files by web address | S3 |
+| Disk of one server | EBS |
+| Folder for many servers | EFS |
+? Folder shared by ten Linux servers? | EBS | *EFS | IAM
+
+## Network services
+# c-vpc | VPC: your private network | Beginner | Walls and doors around your servers.
+@@ cloud Internet ; gate VPC ; server Private servers ; router Subnets
+= Without it | PROBLEM
+Your database would sit on a network where strangers can knock on every port.
+= What it is | SOLUTION
+A **Virtual Private Cloud** is your own network with your own address range. You decide what can come in and go out.
+= How it works
+| Part | Job |
+| Subnet | A slice of the network in one zone |
+| Route table | Where traffic goes |
+| Internet gateway | Door to the internet |
+| NAT gateway | Way out for private servers |
+| Security group | Firewall of a server |
+| Network ACL | Firewall of a subnet |
+= Real-time example | PRACTICE
+A clinic: load balancer in public subnets, application and database in private subnets. Only the load balancer can be reached from outside.
+? The database belongs in a... | public subnet | *private subnet | bucket
+^ https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html VPC User Guide
+
+# c-sg | Security groups | Beginner | The firewall on every server.
+@@ cloud Anyone ; shield Security group ; db Database ; server App
+= Without it | PROBLEM
+Robots scan the whole internet all day. An open database port is found within hours.
+= What it is | SOLUTION
+A list of what may reach a resource: protocol, port, source. Anything not listed is refused. It is **stateful**: answers may leave.
+= How it works
+A rule can name **another security group** as the source: "only the app may reach the database", even as servers change.
+= Real-time example | PRACTICE
+: c ok 5432 from app only
+Web: 443 from anywhere. App: 8080 from the web group. Database: 5432 from the app group.
+? Best source for the database rule? | 0.0.0.0/0 | *The app's security group | Your home IP
+
+# c-r53 | Route 53 and CloudFront | Beginner | Finding your site, and bringing it close to users.
+@@ user Visitor ; router Route 53 ; cloud CloudFront ; bucket Origin
+= Without them | PROBLEM
+Visitors must remember a number such as 203.0.113.10, and someone far away waits for every picture to cross the ocean.
+= What they are | SOLUTION
+**Route 53** is DNS: it turns a name into an address. **CloudFront** is a content delivery network that keeps copies near users.
+= How it works
+Route 53 can send users to the nearest or the healthy region. CloudFront answers from an edge location and asks the origin only when it has no copy.
+= Real-time example | PRACTICE
+A shop in Mumbai with buyers in Brazil: pictures come from São Paulo, orders go to Mumbai.
+? CloudFront speeds a site by... | bigger servers | *copies near the visitor | fewer pages
+
+# c-apigw | API Gateway | Intermediate | A front door for your APIs.
+@@ user App user ; gate API Gateway ; small Functions ; shield Auth
+= Without it | PROBLEM
+Each service must check logins, limit abuse and log requests on its own, each a little differently.
+= What it is | SOLUTION
+One managed entrance for HTTP and WebSocket APIs.
+= How it works
+It checks identity, limits the rate, routes `/orders` to one function and `/users` to another, and logs.
+= Real-time example | PRACTICE
+A bus company sells its timetable data: each partner has a key and a limit of requests per day.
+? API Gateway can... | store files | *limit request rates | train people
+
+## Database and messaging services
+# c-rds | RDS and Aurora | Beginner | A relational database someone else looks after.
+@@ server App ; db RDS ; db Standby ; bucket Backups
+= Without it | PROBLEM
+You install the database, patch it at night, test backups, and build a spare. Forget one and you lose data.
+= What it is | SOLUTION
+**RDS** runs PostgreSQL, MySQL, MariaDB, Oracle, SQL Server or Db2 for you. **Aurora** is Amazon's own engine, compatible with MySQL and PostgreSQL.
+= How it works
+Automatic backups allow restore to a point in time. **Multi-AZ** keeps a standby in another zone. **Read replicas** share reading.
+= Real-time example | PRACTICE
+A hotel's bookings: on failure the standby takes over in a minute or two. The app reconnects to the same name.
+? Multi-AZ is for... | speed | *availability | lower price
+
+# c-dynamo | DynamoDB and ElastiCache | Intermediate | Very fast lookups by key.
+@@ server App ; db DynamoDB ; small Cache ; team Users
+= Without them | PROBLEM
+Millions of users each ask for their own cart. One relational database becomes the bottleneck.
+= What they are | SOLUTION
+**DynamoDB** stores items found by key at any scale. **ElastiCache** keeps answers in memory (Valkey, Redis OSS, Memcached).
+= How it works
+You choose a **partition key** so data spreads evenly. Design from the questions you will ask, not from tables.
+= Real-time example | PRACTICE
+A game keeps each player's state in DynamoDB and the top-100 list in the cache.
+? DynamoDB finds items by... | full text | *key | colour
+
+# c-sqs | SQS, SNS and EventBridge | Beginner | Let parts talk without waiting for each other.
+@@ server Shop ; queue SQS queue ; gear Worker ; bucket Dead letters
+= Without it | PROBLEM
+The shop calls the email service directly. Email is slow, so paying is slow. Email is down, so nobody can pay.
+= What they are | SOLUTION
+**SQS**: a queue that holds messages until a worker takes them. **SNS**: one message to many receivers. **EventBridge**: routes events by rules.
+= How it works
+The worker deletes a message after success. After several failures it goes to a **dead-letter queue** for a person to check.
+= Real-time example | PRACTICE
+On sale day 50,000 orders arrive in an hour. The queue holds them; workers finish by lunch; no order is lost.
+? One message to many receivers? | SQS | *SNS | S3
+
+## Management and delivery services
+# c-cw | CloudWatch and CloudTrail | Beginner | What is happening, and who did it.
+@@ server Workload ; gauge CloudWatch ; user On-call ; doc CloudTrail
+= Without them | PROBLEM
+" c Customers told us first.
+You learn about failures from customers, and cannot say who opened the firewall.
+= What they are | SOLUTION
+**CloudWatch**: metrics, logs, alarms. **CloudTrail**: a record of API calls: who, what, when, from where.
+= How it works
+An **alarm** watches a metric and notifies or scales. CloudTrail sends records to a protected bucket.
+= Real-time example | PRACTICE
+Error rate above 2% for five minutes: the on-call person is paged. A deleted server: CloudTrail shows the user and time.
+? "Who deleted it?" is answered by... | CloudWatch | *CloudTrail | Route 53
+
+# c-cfn | CloudFormation and CDK | Intermediate | Build everything from a file.
+@@ user Engineer ; doc Template ; cloud AWS resources ; gear Stack
+= Without it | PROBLEM
+" a Which settings did test have?
+Forty clicks for production, slightly different from the forty for test.
+= What it is | SOLUTION
+**CloudFormation** reads a template and creates a **stack** of resources. **CDK** writes templates from code such as TypeScript or Python.
+= How it works
+A **change set** shows what will change. If creation fails, it rolls back. Deleting the stack removes its resources.
+= Real-time example | PRACTICE
+A training company makes a full copy of its lab for each course on Monday and deletes it on Friday.
+? What shows changes before applying? | A bucket | *A change set | A role
+
+# c-code | CodeCommit, CodeBuild, CodeDeploy, CodePipeline | Intermediate | AWS's own delivery tools.
+@@ user Developer ; gear CodePipeline ; server Servers ; cube CodeBuild
+= Without them | PROBLEM
+Building and copying by hand at night. Steps are forgotten.
+= What they are | SOLUTION
+**CodeCommit** Git hosting, **CodeBuild** builds and tests, **CodeDeploy** releases, **CodePipeline** joins the steps.
+= How it works
+A push starts the pipeline: build, test, approve, deploy. CodeDeploy can go blue-green and roll back on an alarm.
+= Real-time example | PRACTICE
+A bank that must keep everything in its AWS account uses these; a start-up on GitHub uses Actions with OIDC instead.
+? Which joins the steps? | CodeBuild | *CodePipeline | CodeCommit
+
+# c-cost | Billing, Budgets and Organizations | Beginner | Paying only for what you meant to.
+@@ user Finance ; board Budgets ; cloud Accounts ; flag Alert
+= Without it | PROBLEM
+" a Who spent 4,000 last month?
+A forgotten test server and a large data transfer appear on the bill a month later.
+= What it is | SOLUTION
+**Budgets** warn you, **Cost Explorer** shows where money goes, **Organizations** groups accounts with one bill and shared rules.
+= How it works
+Tag resources with team and project. Set an alert at 50%, 80% and 100% of the plan.
+= Real-time example | PRACTICE
+A company gives each team its own account: test, staging, production. A mistake in test cannot touch production, and costs are clear.
+? First thing to set on a new account? | A large server | *MFA and a budget alert | A public bucket

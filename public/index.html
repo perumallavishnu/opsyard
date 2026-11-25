@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Opsyard: learn DevOps step by step</title>
+<meta name="description" content="Free DevOps course from first principles to production, explained one step at a time with isometric animations.">
+<link rel="icon" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..110,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <button id="menu" class="ib" aria-controls="side" aria-expanded="false"></button>
+  <a class="brand" href="#/" translate="no"><svg viewBox="0 0 40 32" aria-hidden="true"><path d="M2 12 20 3 38 12 20 21Z" fill="#f2b632"/><path d="M2 12V22L20 31V21Z" fill="#c8432b"/><path d="M38 12V22L20 31V21Z" fill="#8f2d1c"/><path d="M6 15v8M10 17v8M14 19v8" stroke="#fff" stroke-opacity=".45" stroke-width="1.5"/></svg><b>Opsyard</b></a>
+  <nav id="nav" aria-label="Main"></nav>
+  <button id="search" class="find"></button>
+  <button id="lang" class="ib" popovertarget="langs" translate="no"></button>
+  <button id="theme" class="ib"></button>
+</header>
+<div id="note" role="status" hidden></div>
+<div class="shell">
+  <aside id="side"></aside>
+  <main id="main" tabindex="-1"></main>
+</div>
+<div id="langs" popover translate="no"></div>
+<dialog id="find"></dialog>
+<script type="module" src="app.js"></script>
+</body>
+</html>

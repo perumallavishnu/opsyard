@@ -1,0 +1,96 @@
+% devsecops | DevSecOps | #3b4a54 | Security inside the pipeline: threat modelling, scanning, secrets and the supply chain.
+
+## Security in delivery
+# ds-shift | Shifting security left | Beginner | Checks at each stage, from idea to running system.
+@ p board 0 0 Plan
+@ c laptop 1 0 Code
+@ b gear 2 0 Build
+@ d box 3 0 Deploy
+@ r server 4 0 Run
+= At the end | PROBLEM
++ p c b d r
+~ !r>p findings
+A security review the week before launch finds design problems too late.
+= Plan
+* p
+**Threat modelling**: what are we building, what can go wrong, what will we do, did it work? STRIDE: spoofing, tampering, repudiation, information disclosure, denial of service, elevation of privilege.
+= Code
+* c
+Secret scanning before commit, review, **SAST** reads source for dangerous patterns.
+= Build
+* b
+**SCA** checks dependencies against known vulnerabilities. Image and IaC scans check what you ship.
+= Deploy and run
+* d r
+**DAST** attacks a running test copy. Policies block bad configuration. Runtime tools such as Falco watch behaviour.
+= Tune it | PRACTICE
+Two hundred warnings nobody reads is no security. Block on high-confidence, reachable issues; track the rest.
+? Which tool type tests a running app? | SAST | SCA | *DAST
+^ https://owasp.org/www-project-devsecops-guideline/ OWASP DevSecOps Guideline
+
+# ds-secret | Managing secrets | Intermediate | Store, deliver, rotate.
+@ a pod 0 0 App
+@ v key 1 0 Vault
+@ d db 2 0 Database
+@ g db 0 1 Git
+@ l doc 1 1 Audit log
+= In Git | PROBLEM
++ a g
+~ !g>a password
+: g err leaked
+Copies spread to every clone, log and backup.
+= A secret store | SOLUTION
++ v
+~ a>v identity ;; v>a secret
+HashiCorp Vault, OpenBao, AWS Secrets Manager, Azure Key Vault. The app proves who it is using its platform identity.
+= Dynamic
++ d
+~ v>d create user ;; v>a 1 hour login
+Short-lived credentials made on request. A leak expires by itself.
+= Rotate
+: d ok rotated
+Automate rotation. Support two valid values during the change.
+= Audit
+Every read is recorded: which identity, which secret, when. After a leak, this shows what was exposed.
++ l
+~ v>l who read what
+= If it leaks | RISK
+* g
+Revoke, replace, check use, then clean up. In that order.
+? Advantage of dynamic secrets? | Longer life | *Short life and traceable | No network
+
+# ds-chain | Software supply chain | Advanced | Proving what you run is what you built.
+@ s db 0 0 Source
+@ b gear 1 0 Builder
+@ a box 2 0 Artifact
+@ sb doc 2 1 SBOM
+@ k key 1 1 Signature
+@ g gate 3 0 Admission
+@ c pod 4 0 Cluster
+= Many ways in | PROBLEM
++ s b a
+~ !s>b bad package ;; !b>a tampered
+Attackers go for dependencies, build servers and registries, since one success reaches many.
+= SBOM
++ sb
+~ a>sb list
+A software bill of materials lists every component (SPDX or CycloneDX). When a flaw is announced, search it.
+$ syft acme/web:2.0 -o cyclonedx-json
+= Sign
++ k
+~ k>a signed
+$ cosign sign ghcr.io/acme/web@sha256:...
+Sigstore can sign with a short-lived identity instead of a long-kept key.
+= Provenance
+* b
+**SLSA** levels describe how trustworthy the build record is: which source, which builder, unaltered.
+= Verify
++ g c
+~ a>g ;; g>c verified only
+: g ok checked
+Signing without verifying does nothing. Enforce at admission.
+= Dependencies | PRACTICE
+* s
+Lock versions, delay brand-new releases, use a private proxy, beware look-alike names.
+? A signature helps only if you... | publish it | *verify it before running | rename the image
+^ https://slsa.dev/ SLSA

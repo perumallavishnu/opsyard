@@ -1,0 +1,194 @@
+% linux | Linux and Networking | #8a6d1d | Why Linux runs most servers, each building block on its own, then networks, services and scripts.
+
+## Introduction
+# linux-why | Why Linux exists | Beginner | The need for a free, open system that anyone can run and change.
+@@ user Programmer ; gear Linux ; rack Servers ; team Community
+= Before Linux | PROBLEM
+" a Unix costs more than my computer.
+In the 1980s good multi-user systems such as commercial Unix were expensive, and you could not study or change them freely.
+= A free kernel | SOLUTION
+Linus Torvalds wrote a kernel and shared it. Together with the GNU tools it became a complete system anyone may run, read, change and share.
+= Why it spread
+Thousands of people and companies improve it. It runs on phones, routers, cars, supercomputers and most cloud servers. No licence per machine, and it can be made very small.
+= What it solves for DevOps
+| Need | Linux |
+| Automate everything | Shell and text files |
+| Many servers | No licence per server |
+| Containers | Namespaces and cgroups in the kernel |
+| Remote work | SSH |
+= In practice | PRACTICE
+Docker containers, Kubernetes nodes and CI runners are Linux in most companies. Learn it once and it helps in every other subject here.
+? What lets containers exist? | A web browser | *Kernel features such as namespaces | A licence
+
+# linux-history | A short history of Linux | Beginner | From Unix to the cloud.
+@h 1969 Unix ; 1983 GNU ; 1991 Linux ; 1993 Debian ; 2004 Ubuntu ; 2008 Android phone ; 2013 Kali and Docker
+= 1969 | HISTORY
+Ken Thompson, Dennis Ritchie and others create **Unix** at Bell Labs. In 1973 it is rewritten in C, so it can move to other machines.
+= 1983 | HISTORY
+Richard Stallman announces **GNU**: a free Unix-like system.
+= 1991 | HISTORY
+Linus Torvalds, a student in Helsinki, releases the first **Linux** kernel on 17 September 1991.
+= 1993 | HISTORY
+**Debian** and **Slackware** start. Distributions make Linux installable.
+= 2004 | HISTORY
+**Ubuntu** aims to make Linux easy for everyone.
+= 2008 | HISTORY
+The first **Android** phone uses the Linux kernel.
+= 2013 and after | HISTORY
+**Kali** replaces BackTrack for security testing; **Docker** makes Linux containers popular. Cloud computing runs largely on Linux.
+? Who wrote the first Linux kernel? | Dennis Ritchie | *Linus Torvalds | Richard Stallman
+
+## Building blocks
+# c-fs | The file system | Beginner | One tree for everything.
+@@ user You ; folder File system ; db Disk ; doc Files
+= Without it | PROBLEM
+A disk is only numbered blocks. Without names and folders you could not find anything.
+= What it is | SOLUTION
+A single tree that starts at `/`. Disks are **mounted** as folders. There are no drive letters.
+= How it works
+| Path | Holds |
+| /etc | Settings |
+| /home | People's files |
+| /var/log | Logs |
+| /usr/bin | Programs |
+| /tmp | Temporary files |
+| /proc | Live kernel data |
+$ pwd
+$ ls -la /etc
+= Real-time example | PRACTICE
+"Disk full" at night: `df -h` shows `/var` at 100%, `du -sh /var/log/*` finds a 40 GB log. Rotate it, then fix the cause.
+? Where are settings usually kept? | /tmp | */etc | /proc
+
+# c-pkg | Package managers | Beginner | Installing software safely.
+@@ user Admin ; box apt or dnf ; cloud Repository ; shield Signature
+= Without them | PROBLEM
+You search the web, download unknown files, and forget to update them.
+= What they are | SOLUTION
+A package manager installs, updates and removes software from trusted **repositories**, with everything it depends on.
+= How it works
+Packages are **signed**; the manager checks the signature before installing.
+$ sudo apt update
+$ sudo apt install nginx
+$ sudo apt upgrade
+= Real-time example | PRACTICE
+A security hole is announced on Monday. With one command, run by Ansible, 200 servers are fixed by Monday evening.
+? What does apt check? | The colour | *The package signature | Your age
+
+# c-ssh | SSH | Beginner | A safe terminal on a machine far away.
+@@ user Admin ; key SSH ; server Remote server ; doc Known hosts
+= Without it | PROBLEM
+Telnet sent passwords as readable text. Anyone on the path could see them.
+= What it is | SOLUTION
+**Secure Shell** encrypts the connection and proves who both sides are.
+= How it works
+You keep a private key; the server holds your public key. The first time, check the server's fingerprint.
+$ ssh ana@server
+= Real-time example | PRACTICE
+A company closes password login on all servers. Attack attempts continue, but without a key they cannot get in.
+? What stays on your computer? | The public key only | *The private key | The server's key
+
+# c-cron | Scheduled jobs | Beginner | Work that happens by itself.
+@@ user Admin ; gear cron / timer ; server Job ; doc Log
+= Without it | PROBLEM
+" a I forgot the backup on Sunday.
+Someone must remember every night.
+= What it is | SOLUTION
+**cron** runs commands at set times. **systemd timers** do the same with better logs.
+= How it works
+Five fields: minute, hour, day, month, weekday.
+$ 30 2 * * * /opt/backup.sh
+means 02:30 every day.
+= Real-time example | PRACTICE
+A backup script ran for months and wrote nothing, because nobody read its mail. Always check the **result**, and alert when a job does not report success.
+? "30 2 * * *" runs... | every 30 minutes | *at 02:30 daily | on day 30
+
+# c-env | Environment variables | Beginner | Settings handed to a program.
+@@ user Developer ; card Variables ; server Program ; key Secrets
+= Without them | PROBLEM
+The database address is written inside the code, so test and production need different code.
+= What they are | SOLUTION
+Named values a program receives when it starts, such as `DB_HOST` or `PATH`.
+= How it works
+$ export DB_HOST=db.test
+$ ./app
+Child programs inherit them. `PATH` lists where the shell looks for commands.
+= Real-time example | PRACTICE
+The same container image runs in test and production; only the variables differ. Keep real secrets in a secret store: variables can appear in logs and process lists.
+? PATH tells the shell... | your name | *where to look for commands | the time
+
+## Network building blocks
+# c-osi | Layers of a network | Beginner | Why the work is split into layers.
+@@ laptop Sender ; layer Layers ; server Receiver ; doc Packet
+= Without layers | PROBLEM
+Every program would need to know about cables, radio and routes.
+= What it is | SOLUTION
+Each layer does one job and uses the one below. The **OSI model** has seven; **TCP/IP** groups them into four.
+= How it works
+| OSI layer | Example |
+| 7 Application | HTTP, DNS |
+| 6 Presentation | Encoding |
+| 5 Session | Sessions |
+| 4 Transport | TCP, UDP |
+| 3 Network | IP |
+| 2 Data link | Ethernet, Wi-Fi |
+| 1 Physical | Cable, radio |
+= Real-time example | PRACTICE
+"The site is down." Check from the bottom: cable or Wi-Fi, IP address, port, then the application. You find the broken layer quickly.
+? TCP belongs to layer... | 1 | 7 | *4
+
+# c-tcp | TCP and UDP | Beginner | Careful delivery or fast delivery.
+@@ laptop Client ; router TCP ; server Server ; queue Segments
+= Without it | PROBLEM
+IP packets can be lost, doubled or arrive in the wrong order.
+= What it is | SOLUTION
+**TCP** numbers data, confirms it and sends lost parts again. **UDP** just sends.
+= How it works
+TCP opens with three messages: SYN, SYN-ACK, ACK. Then data flows both ways.
+= Real-time example | PRACTICE
+| Use | Protocol |
+| Web pages, files, email | TCP |
+| Live voice, games, DNS | UDP mostly |
+| HTTP/3 | QUIC over UDP |
+? A video call prefers... | TCP | *UDP | SSH
+
+# c-dns | DNS | Beginner | The phone book of the internet.
+@@ user Visitor ; db DNS ; server Web server ; router Resolver
+= Without it | PROBLEM
+You would type 203.0.113.10 instead of a name, and every visitor would need the new number when the server moves.
+= What it is | SOLUTION
+The **Domain Name System** turns names into addresses. It is spread over many servers.
+= How it works
+A resolver asks a root server, then the `.com` server, then the domain's own server, and remembers the answer for its **TTL**.
+= Real-time example | PRACTICE
+Before moving a site, lower the TTL to 60 seconds a day earlier. After the move everyone sees the new address in a minute.
+? TTL means... | the owner | *how long an answer may be kept | the price
+
+# c-http | HTTP and HTTPS | Beginner | How browsers and servers talk.
+@@ laptop Browser ; doc HTTP ; server Web server ; shield TLS
+= Without it | PROBLEM
+Every program would invent its own way to ask for a page.
+= What it is | SOLUTION
+A request (method, path, headers, body) and a response (status, headers, body). **HTTPS** is HTTP inside encrypted TLS.
+= How it works
+| Status | Meaning |
+| 200 | OK |
+| 301 | Moved |
+| 401 / 403 | Log in / not allowed |
+| 404 | Not found |
+| 500 | Server error |
+| 503 | Unavailable |
+= Real-time example | PRACTICE
+Users report errors. 4xx: usually the request is wrong. 5xx: the server is. That one digit tells you which team to call.
+? 503 points to... | the visitor | *the server side | DNS spelling
+
+# c-proxy | Firewalls, proxies and load balancers | Intermediate | Three boxes between user and app.
+@@ cloud Internet ; gate Firewall ; router Reverse proxy ; server App
+= Without them | PROBLEM
+The app faces the whole internet alone.
+= What they are | SOLUTION
+A **firewall** allows or drops traffic. A **reverse proxy** (nginx, HAProxy) receives requests for your servers. A **load balancer** spreads them.
+= How it works
+The proxy ends TLS, adds headers, caches and passes the request on.
+= Real-time example | PRACTICE
+A company replaces one app server during the day: the proxy sends users to the other, then back. Nobody notices.
+? Who spreads requests over servers? | Firewall | *Load balancer | DNS TTL

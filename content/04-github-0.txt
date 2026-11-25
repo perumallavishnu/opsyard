@@ -1,0 +1,120 @@
+% github | GitHub | #5b4b8a | Why teams share code on GitHub, its parts one by one, then reviews, protection, Actions and security.
+
+## Introduction
+# gh-why | Why GitHub exists | Beginner | Git alone is a tool on your machine. Teams needed a meeting place.
+@ a user 0 0 Developer A
+@ b user 1 1 Reviewer
+@ g cloud 1 0 GitHub
+@ ci gear 2 0 Checks
+@ p rack 3 0 Product
+= Patches by email | PROBLEM
++ a b
+w !a>b patch by email
+" b Which version is this for?
+Before hosting platforms, changes often travelled as email attachments. Review comments, decisions and files were scattered.
+= A shared home | SOLUTION
++ g
+w a>g push
+w b>g review
+" b Line 12: please check for zero.
+GitHub hosts Git repositories and adds what Git has not: pull requests, reviews, issues, permissions, a web page for every project.
+= Checks on every change
++ ci p
+~ g>ci test ;; ci>p release
+: ci ok passed
+Actions test and release automatically. The history of *why* sits next to the code.
+= How it helps development and maintenance
+| Need | GitHub |
+| Review | Pull requests |
+| Plan | Issues, Projects |
+| Protect main | Rulesets |
+| Automate | Actions |
+| Stay safe | Dependabot, secret scanning |
+| Share | Open source, forks, releases |
+= Not the only one
+GitLab, Bitbucket and Azure Repos solve the same problem. **Git** is the tool; these are places where it lives.
+? What does GitHub add to Git? | Commits | *Collaboration around the code | Branches
+^ https://docs.github.com/en/get-started/start-your-journey/about-github-and-git GitHub Docs: About GitHub and Git
+
+# gh-history | A short history of GitHub | Beginner | From a side project to the home of open source.
+@h 2008 Launch ; 2013 3 million users ; 2018 Microsoft ; 2019 Actions ; 2021 Copilot preview ; 2025 Agents
+= 2008 | HISTORY
+Started by Tom Preston-Werner, Chris Wanstrath, P. J. Hyett and Scott Chacon. Pull requests become its signature idea.
+= 2013 | HISTORY
+Passes 3 million users and 5 million repositories.
+= 2018 | HISTORY
+Microsoft buys GitHub.
+= 2019 | HISTORY
+**GitHub Actions** becomes generally available with CI/CD; private repositories had become free for small teams that year.
+= 2021 | HISTORY
+**Copilot** preview: AI suggestions in the editor.
+= Recently | HISTORY
+AI agents can propose pull requests. Review and protection rules matter even more.
+? Who bought GitHub in 2018? | Google | *Microsoft | Amazon
+
+## Parts of GitHub
+# c-ghrepo | Repository page and README | Beginner | The front door of a project.
+@@ user Visitor ; doc README ; db Code ; shield Licence
+= Without it | PROBLEM
+" a How do I start this?
+A stranger finds code and cannot tell what it does or whether it may be used.
+= What it is | SOLUTION
+Each repository has a page. **README** explains, **LICENSE** permits, **CONTRIBUTING** guides, **SECURITY** tells how to report a problem.
+= How it works
+Public: everyone can read. Private: only people you invite. Roles: read, triage, write, maintain, admin.
+= Real-time example | PRACTICE
+A company publishes a library. Good README and licence bring 200 users and 15 fixes from outside.
+? No licence file means... | free to use | *no clear permission to use | public domain
+
+# c-issues | Issues and Projects | Beginner | Work lists beside the code.
+@@ user User ; card Issue ; team Dev team ; board Project
+= Without them | PROBLEM
+Bug reports come by chat and are forgotten.
+= What they are | SOLUTION
+An **issue** is a discussion about one bug or idea. A **Project** is a board or table of issues.
+= How it works
+Labels, assignees, milestones, templates. Writing `Closes #42` in a pull request closes the issue on merge.
+= Real-time example | PRACTICE
+A five-person start-up plans everything in Projects. A 200-person company uses Jira and links it to GitHub.
+? What closes an issue on merge? | A label | *The word Closes with its number | A star
+
+# c-fork | Fork, star, watch | Beginner | Taking part in someone else's project.
+@@ user You ; db Your fork ; db Their project ; user Maintainer
+= Without it | PROBLEM
+You found a bug in a tool but may not write to its repository.
+= What it is | SOLUTION
+A **fork** is your own copy on GitHub. You change it and offer the change back by pull request.
+= How it works
+Fork, clone, branch, push, open pull request. The maintainer reviews. **Star** is a bookmark, **watch** sends news.
+= Real-time example | PRACTICE
+A student fixes a spelling error in documentation: a first open source contribution in ten minutes.
+? Contribute without write access by... | email | *fork and pull request | star
+
+# c-runner | Workflow, job, step, runner | Beginner | The words of GitHub Actions.
+@@ flag Event ; doc Workflow ; server Runner ; card Steps
+= Without them | PROBLEM
+Tests run only when someone remembers.
+= What they are | SOLUTION
+| Word | Meaning |
+| Event | What starts it |
+| Workflow | The YAML file |
+| Job | Steps on one machine |
+| Step | One command or action |
+| Runner | The machine |
+= How it works
+Files in `.github/workflows`. Jobs run side by side unless one `needs` another.
+= Real-time example | PRACTICE
+Every push: lint, test on two Node versions, build. Six minutes, with no one waiting.
+? A job runs on a... | branch | *runner | label
+
+# c-ghsecret | Secrets, variables, environments | Intermediate | Settings for automation.
+@@ user Admin ; key Secret ; gear Workflow ; gate Environment
+= Without them | PROBLEM
+A token is written in the workflow file and everyone can read it.
+= What they are | SOLUTION
+**Secrets** are encrypted and hidden in logs. **Variables** are plain settings. **Environments** hold both and can demand approval.
+= How it works
+`${{ secrets.NPM_TOKEN }}` is filled in at run time. Fork pull requests normally get no secrets.
+= Real-time example | PRACTICE
+Deploying to `production` waits for one of two named people to approve.
+? Approval before production belongs to... | a label | *an environment | a fork
