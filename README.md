@@ -113,7 +113,9 @@ opsyard/
 ├─ server.js    local web server
 ├─ build.js     writes dist/
 ├─ test.js      checks everything
-└─ vercel.json  deployment settings
+├─ vercel.json  deployment settings
+├─ LICENSE             code (MIT)
+└─ LICENSE-CONTENT.md  course content (CC BY-NC 4.0)
 ```
 
 [PROJECT.md](PROJECT.md) explains every file, the lesson format and the animation engine.
@@ -144,6 +146,7 @@ The full checklist is in [PROJECT.md, section 10](PROJECT.md#10-contribute).
 
 ## Licences
 
-This project has **no licence file yet**, so all rights stay with its owner until one is chosen.
+- **Code:** [MIT](LICENSE)
+- **Lessons, translations, notes and documentation:** [CC BY-NC 4.0](LICENSE-CONTENT.md), non-commercial use with credit
 
 The translations were made with NLLB-200 (CC-BY-NC 4.0, non-commercial). Bundled icons and figures are listed in [public/vendor/LICENSES.txt](public/vendor/LICENSES.txt). Product names and logos belong to their owners and only identify the tools being taught; Opsyard is not connected to them.

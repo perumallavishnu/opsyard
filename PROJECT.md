@@ -140,6 +140,8 @@ opsyard/
 ├─ PROJECT.md            this guide
 ├─ README.md             overview and quick start
 ├─ vercel.json           deployment settings
+├─ LICENSE               code licence (MIT)
+├─ LICENSE-CONTENT.md    course content licence (CC BY-NC 4.0)
 ├─ docs/                 pictures for the README
 ├─ package.json          the start, test and build commands
 ├─ server.js             local web server
@@ -451,7 +453,7 @@ Then open a pull request. Say what you changed and why, and add a screenshot for
 
 The code is at https://github.com/perumallavishnu/opsyard.
 
-The project has **no licence file yet**. Choose one before inviting others: without a licence, people have no clear permission to reuse or change it.
+**Licences:** code is [MIT](LICENSE); lessons, translations, notes and documentation are [CC BY-NC 4.0](LICENSE-CONTENT.md). Contributions are published under the licence of the part they change.
 
 **Vercel:** import the repository and deploy; `vercel.json` holds the settings. Vercel runs the tests first, so a broken version is not published.
 
