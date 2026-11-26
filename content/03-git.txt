@@ -9,22 +9,44 @@
 = final_v2_REALLY | PROBLEM
 + a b f
 ~ a>f app.js ;; !b>f overwrites
-Copying files around loses work. Nobody knows who changed what, or why, or how to go back.
+Ana and Ben share one folder. Ana saves `app.js` at 10:00. Ben opened the file at 9:55 and saves his version at 10:05. Ana's work is silently gone.
+Teams try to protect themselves with copies (`app_final.js`, `app_final2.js`) or by emailing ZIP files. After a few weeks nobody knows:
+- which copy is the right one;
+- what changed between two copies, and who changed it;
+- why a line was changed;
+- how to get back the version that worked last Tuesday.
 = A commit is a snapshot | SOLUTION
 x f
 + r
 ~ a>r commit ;; b>r commit
-Git records snapshots called **commits**. Each has an author, a date, a message, and a link to its parent.
-= Distributed
+With Git, each person saves work as **commits**: snapshots of the whole project with author, date, a message and a link to the previous snapshot.
+Nothing is overwritten. If Ana and Ben change the same file, Git keeps both commits and joins the changes. When they touch the same lines, Git stops and asks them to decide, instead of letting one silently win.
+= Distributed: everyone has everything
 * a b
-Every clone has the **full history**. You can commit, branch and compare offline.
+Git is **distributed**: every copy of a repository contains the **full history**, not just the latest files.
+- You can commit, look at old versions, compare and create branches **without internet**.
+- If the server disappears, any teammate's copy can restore it.
+- Most commands are instant because they read your own disk, not a server.
+Older tools such as Subversion were **centralised**: history lived on one server, and you needed it for almost everything.
 = Git is not GitHub
 * r
-Git is the tool on your machine. GitHub, GitLab and Bitbucket host repositories and add reviews and automation.
+These two names are often mixed up:
+| | Git | GitHub |
+| What | A program on your computer | A website that hosts repositories |
+| Made by | Linus Torvalds, 2005; free, open source | GitHub Inc., now part of Microsoft |
+| Does | Commits, branches, merges, history | Shares repositories, pull requests, reviews, issues, automation |
+| Works offline | Yes | No |
+GitLab and Bitbucket are alternatives to GitHub. They all use the same Git underneath, so your commands are the same everywhere.
 = Set up once
-$ git config --global user.name "Ana"
+Before your first commit, tell Git who you are. These settings go into every commit you make.
+$ git config --global user.name "Ana Rao"
+- git config = change a Git setting
+- --global = for all your repositories on this computer
+- user.name = the name shown as author
 $ git config --global user.email "ana@example.com"
+- user.email = the email shown as author; GitHub links commits to your account through it
 $ git config --global init.defaultBranch main
+- init.defaultBranch main = new repositories start with a branch called `main`
 Git 3.0 is planned to make `main` the built-in default. Setting it now gives the same result today.
 ? Where does the full Git history live? | Only on GitHub | *In every clone | In the last commit
 ^ https://git-scm.com/book/en/v2 Pro Git book
@@ -33,37 +55,60 @@ Git 3.0 is planned to make `main` the built-in default. Setting it now gives the
 @ w folder 0 0 Working tree
 @ s layer 1 0 Staging area
 @ r db 2 0 Repository
-= Edit
+= Edit in the working tree
 + w
+The **working tree** is simply your project folder: the files you see and edit in your editor. Git watches it, but does not save anything until you ask.
 $ git init
+- git init = turn the current folder into a repository (only needed once, for a new project)
 $ git status
-Files you see and edit are the **working tree**. A new file is *untracked* until you tell Git about it.
-= Stage
+- git status = report what changed since the last commit. Safe to run any time; it never changes anything
+> Untracked files:
+>   app.js
+A new file is **untracked**: Git sees it but is not keeping its history yet.
+= Stage: prepare the next commit
 + s
 ~ w>s git add
+The **staging area** (also called the **index**) is a draft of your next commit. You put into it exactly the changes you want to save together.
 $ git add app.js
+- git add = copy the current state of the file into the staging area
+- app.js = which file. Several names, folders or patterns such as `*.css` also work
 $ git add -p
-The **staging area** (index) is a draft of the next commit. `-p` stages part of a file.
-= Commit
+- -p = "patch": Git shows each changed piece and asks `y` (stage) or `n` (skip). Lets you commit part of a file
+**Why stage at all?** You may have fixed a bug and also renamed some variables. Staging lets you save these as two commits, so each one is easy to understand and, if needed, to undo.
+= Commit: save permanently
 + r
 ~ s>r git commit
 $ git commit -m "Add login form"
-The staged draft becomes a permanent snapshot.
-= See differences
+- git commit = turn everything staged into a new, permanent snapshot in the repository
+- -m "…" = the message, written in the same command
+After the commit, the staging area matches the new commit, and `git status` says "nothing to commit, working tree clean".
+= See the differences
 * w s r
+Before staging or committing, look at what you changed:
 $ git diff
+- git diff = changes in the working tree that are **not staged yet**
 $ git diff --staged
-Plain `diff` compares working tree to staging. `--staged` compares staging to the last commit.
+- --staged = changes that **are staged** and will go into the next commit
+> -  total = price
+> +  total = price * quantity
+Lines starting with `-` were removed, lines with `+` were added.
+! Read `git diff --staged` before every commit. It is the cheapest code review there is.
 = Undo a step
 ~ s>w restore --staged
 $ git restore --staged app.js
+- restore --staged = take the file out of the staging area. Your edits stay in the file
 $ git restore app.js
-The first unstages and keeps your edit.
-!! `git restore app.js` throws away unstaged edits in that file. Git has no copy of them.
-= Ignore
+- restore (without --staged) = throw away your edits and put the file back as it was in the last commit
+!! `git restore app.js` deletes unsaved edits in that file for good. Git never had a copy of them.
+= Ignore files
 * w
-List build output, secrets and local settings in `.gitignore`. It does not affect files already tracked.
-? What does `git diff --staged` compare? | Working tree and staging | *Staging and last commit | Two branches
+Some files should never be committed: installed packages, build output, logs and secrets. List them in a file called `.gitignore`:
+> node_modules/
+> .env
+> *.log
+After that, `git status` and `git add .` skip them. `.gitignore` only affects files that are not tracked yet; a file already committed must be removed with `git rm --cached <file>`.
+? What does git diff --staged compare? | Working tree and staging | *Staging and the last commit | Two branches
+^ https://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository Pro Git: recording changes
 
 # git-objects | Inside .git | Intermediate | Blobs, trees, commits, and why history is tamper-evident.
 @ b1 card 2 0 Blob app.js
@@ -72,28 +117,45 @@ List build output, secrets and local settings in `.gitignore`. It does not affec
 @ c commit 0 0 Commit
 @ p commit 0 1 Parent commit
 @ m flag -1 0 main
-= Blobs
+= Blobs: file contents
 + b1 b2
-A **blob** holds file contents. Its name is a hash of what is inside. The same content is stored once.
-= Trees
+Inside `.git/objects`, Git stores everything as small files called **objects**. The first kind is the **blob**: the contents of one file, without its name.
+Each object is named by a **hash** of its content: a 40-character code calculated from the bytes. Two identical files produce the same hash, so Git stores them only once.
+$ git hash-object app.js
+- hash-object = print the hash Git would give this file's content
+> 8ab686eafeb1f44702738c8b0f24f2567c36da6d
+= Trees: folders
 + t
 ~ t>b1 app.js ;; t>b2 README
-A **tree** lists names and points to blobs and other trees. It is a directory.
-= Commits
+A **tree** is a list of names. Each entry gives a file or folder name and points to a blob (a file) or another tree (a subfolder). A tree is how Git remembers a folder.
+= Commits: snapshots
 + c p
 ~ c>t ;; c>p parent
-A **commit** points to one tree and its parents, plus author and message.
-= Tamper-evident
+A **commit** object contains:
+- the hash of one tree: the whole project at that moment;
+- the hash of its parent commit (two parents for a merge);
+- author, committer, dates and the message.
+$ git cat-file -p HEAD
+- cat-file -p = print any object in readable form ("p" for pretty)
+- HEAD = the commit you are on
+> tree 92b8b6ffb019642e942e211c3ee6e3b6c4e3f7a5
+> parent a12b9e0c4f...
+> author Ana Rao <ana@example.com> 1764140000 +0530
+= Tamper-evident history
 * p c
 : p err changed
-Change one old byte and its hash changes, so every later commit hash changes too. Rewriting is always visible.
-Repositories use SHA-1 today by default; Git 3.0 plans SHA-256 for **new** repositories.
+Because each commit contains its parent's hash, and the parent contains its parent's hash, the hashes form a chain. Change one byte in an old file and its blob hash changes, so its tree hash changes, so every later commit hash changes.
+This is why history cannot be secretly edited: anyone comparing commit IDs sees the difference at once. Rewriting history is possible, but it is always visible.
+Repositories use SHA-1 hashes today by default; Git 3.0 plans SHA-256 for **new** repositories.
 = Branches are labels
 + m
 ~ m>c
-A branch is a small reference holding one commit hash. That is why creating one is instant. **HEAD** says which branch you are on.
-$ git cat-file -p HEAD
-? A branch is... | a copy of all files | *a pointer to a commit | a tree
+A branch is just a tiny file in `.git/refs/heads/` that holds one commit hash. `main` is literally a 41-byte file.
+**HEAD** is another small file, `.git/HEAD`, that says which branch you are on:
+> ref: refs/heads/main
+That is why creating a branch is instant and costs nothing: Git writes one line.
+? A branch is... | a copy of all files | *a label holding one commit hash | a tree
+^ https://git-scm.com/book/en/v2/Git-Internals-Git-Objects Pro Git: Git objects
 
 ## Branches
 # git-branch | Branching and merging | Beginner | Work in parallel, then combine.
@@ -106,33 +168,52 @@ $ git cat-file -p HEAD
 = A line of commits
 + a b
 ~ b>a parent
-Each commit points back to its parent.
+Each commit points back to its parent. Following those links from the newest commit gives the whole history of a branch. Here `main` has two commits: A, then B.
 = Create a branch
 + c f
 ~ c>b parent
 $ git switch -c feature
-New commits move only `feature`. `main` stays at B.
+- git switch = move to a branch
+- -c = create it first
+- feature = the new branch's name
+The new branch starts at the commit you are on (B). Your next commit, C, moves only `feature`. `main` stays at B, so anyone using `main` is not affected by your unfinished work.
 = main moves too
 + d
 ~ d>b parent
-A teammate merges D. The two lines have diverged.
+Meanwhile a teammate merges their own work into `main`, adding commit D. Now both lines have new commits since B. Git calls this **diverged**.
 = Merge
 + m
 ~ m>d ;; m>c
 $ git switch main
+- switch main = go to the branch that should receive the work
 $ git merge feature
-Git finds the common ancestor (B), compares both sides to it and creates a **merge commit** with two parents.
+- merge feature = bring the commits of `feature` into `main`
+Git finds the **common ancestor** (B), compares what each side changed since B, and combines both. The result is a **merge commit** M with two parents, D and C.
 = Fast-forward
 * b c
-If main had not moved, Git would simply slide the label forward: no merge commit. `--no-ff` forces one.
+If `main` had **not** moved after B, there would be nothing to combine. Git would simply slide the `main` label forward to C. This is a **fast-forward**: no merge commit is created.
+$ git merge --no-ff feature
+- --no-ff = create a merge commit anyway, so history shows that a feature branch was joined here
+$ git merge --ff-only feature
+- --ff-only = merge only if a fast-forward is possible; otherwise stop. Useful in scripts
 = Conflict
 : m err conflict
 * m
-When both sides changed the same lines, Git asks you. Edit the file, remove the markers, then:
+When both sides changed the **same lines**, Git cannot choose. It stops, marks the conflict in the file and waits for you:
+> <<<<<<< HEAD
+> timeout = 30
+> =======
+> timeout = 60
+> >>>>>>> feature
+Edit the file to the correct result, delete the three marker lines, then:
 $ git add app.js
+- git add = mark the conflict in this file as solved
 $ git commit
-To give up: `git merge --abort`.
-? When is a fast-forward possible? | Always | *When the target branch has not moved | When there is a conflict
+- git commit = finish the merge
+$ git merge --abort
+- --abort = cancel the merge and go back to how things were
+? When is a fast-forward possible? | Always | *When the target branch has not moved since the branch started | When there is a conflict
+^ https://git-scm.com/book/en/v2/Git-Branching-Basic-Branching-and-Merging Pro Git: branching and merging
 
 # git-rebase | Rebase and cherry-pick | Intermediate | Replaying commits for a straight history.
 @ a commit 0 0 A
@@ -143,31 +224,52 @@ To give up: `git merge --abort`.
 = Diverged
 + a b d c
 ~ b>a ;; d>b ;; c>a
-Your commit C started at A. `main` has since gained B and D.
-= Replay
+Your commit C started from A. Since then `main` gained B and D. You could merge, which adds a merge commit. Or you can **rebase**.
+= Replay with rebase
 + c2
 ~ c2>d
 $ git switch feature
 $ git rebase main
-Rebase makes a **new** commit C2 with the same change, on top of D.
-= The old one is left behind
+- git rebase = take the commits of the current branch and replay them on top of another
+- main = the new base: your commits will come after the latest commit of `main`
+Rebase makes a **new** commit C2 with the same change as C, but with D as its parent. History becomes a straight line, as if you had started your work today.
+= The old commit is left behind
 * c c2
 : c off unreferenced
-C2 has a different hash because its parent differs. C is kept for a while and can be found with reflog.
+C2 has a different hash from C, because its parent is different. The old C is no longer on any branch. Git keeps it for a few weeks; you can find it with `git reflog` if you need it back.
+= If rebase stops on a conflict
+Rebase applies your commits one by one. If one conflicts, it pauses:
+$ git status
+$ git add app.js
+$ git rebase --continue
+- --continue = after fixing and staging the conflict, carry on with the next commit
+$ git rebase --abort
+- --abort = cancel the whole rebase and return the branch to how it was
 = The golden rule | RISK
 * c
 : c err others had it
-!! Do not rebase commits other people already use. Their copies and yours will disagree.
-On your own branch, push with `--force-with-lease`, which refuses if the remote has work you have not seen.
+!! Do not rebase commits that other people already have. Rebase replaces commits with new ones; teammates who built on the old ones end up with duplicate, conflicting history.
+Rebasing your own branch, before or during review, is fine. Because the remote still has the old commits, a normal push is rejected and you must force it. Use the safe form:
 $ git push --force-with-lease
-= Interactive
+- --force-with-lease = overwrite the remote branch **only if** it is still where you last saw it. If someone pushed in the meantime, it refuses instead of deleting their work
+- (compare) --force = overwrite no matter what. Avoid it
+= Interactive rebase: tidy before review
 $ git rebase -i HEAD~4
-Reorder, squash, reword or drop commits before review.
-= Cherry-pick
+- -i = interactive: opens a list of commits in your editor
+- HEAD~4 = the last four commits
+In the list, change the word in front of each commit:
+- pick = keep the commit as it is
+- reword = keep it but change its message
+- squash = join it into the commit above
+- drop = remove it
+= Cherry-pick: copy one commit
 ~ c>d copy one
-$ git cherry-pick <commit>
-Copies one commit to the current branch. Typical use: bring a fix to a release branch.
-? Why is --force-with-lease safer than --force? | It is faster | *It refuses to overwrite unseen work | It makes a backup
+$ git cherry-pick 3f9a2c1
+- git cherry-pick = copy one commit's change onto the current branch as a new commit
+- 3f9a2c1 = the ID of the commit to copy (see `git log --oneline`)
+Typical use: a bug is fixed on `main`, and the same fix is needed on the `release-2.3` branch that customers still use.
+? Why is --force-with-lease safer than --force? | It is faster | *It refuses to overwrite work you have not seen | It makes a backup
+^ https://git-scm.com/book/en/v2/Git-Branching-Rebasing Pro Git: rebasing
 
 # git-remote | Remotes: fetch, pull, push | Beginner | Keeping two repositories in step.
 @ l db 0 0 Local repo
@@ -177,28 +279,52 @@ Copies one commit to the current branch. Typical use: bring a fix to a release b
 = Clone
 ~ r>l clone
 + l r
-$ git clone https://github.com/acme/shop.git
-Copies all history and names the source `origin`.
+$ git clone https://github.com/octo-dev/shop-app.git
+- git clone = copy a remote repository to your computer
+- https://github.com/octo-dev/shop-app.git = the address, from the green **Code** button on GitHub
+Clone downloads all history, creates the folder `shop-app`, checks out the default branch and remembers the address as **`origin`**.
+For private repositories Git asks you to sign in. On GitHub, use a browser sign-in or a personal access token; your account password does not work here.
 = Ben pushes
 " b My change is ready.
 + b
 ~ b>r push
-The remote moves ahead. Your copy does not know yet.
-= Fetch
+Ben commits on his computer and pushes. The remote now has a commit that your copy does not know about yet. Nothing on your computer changes by itself: Git only talks to the remote when you run a command.
+= Fetch: look before you join
 + t
 ~ r>t fetch
 $ git fetch
-Updates **remote-tracking** labels such as `origin/main`. Your own files do not change.
-= Pull
+- git fetch = download new commits from `origin` and update the **remote-tracking** labels such as `origin/main`
+Your own branches and files do **not** change. You can now inspect what arrived:
+$ git log --oneline main..origin/main
+- main..origin/main = commits that are in `origin/main` but not yet in your `main`
+= Pull: fetch and join
 ~ t>l merge
+$ git pull
+- git pull = `git fetch`, then merge `origin/main` into your current branch. Your files change
 $ git pull --rebase
-Pull is fetch followed by merge, or by rebase.
+- --rebase = instead of a merge commit, put your unpushed commits on top of the downloaded ones
+Many teams make rebase the default, to keep history straight:
+$ git config --global pull.rebase true
+= Push your branch
+$ git push -u origin feature
+- git push = upload commits the remote does not have
+- -u = `--set-upstream`: link local `feature` to `origin/feature`, so later plain `git push` and `git pull` know where to go. Only needed the first time
+- origin = the remote
+- feature = the branch to upload; the remote gets a branch with the same name
+After the first push, just:
+$ git push
+If you forget `-u`, the push works, but the next plain `git push` stops with "The current branch has no upstream branch" and shows the command to run.
 = Push rejected
 ~ !l>r push
 : r err not fast-forward
-The remote has commits you lack. Fetch, combine, then push.
-$ git push -u origin feature
+> ! [rejected]  main -> main (non-fast-forward)
+The remote has commits you do not have. Git refuses, because accepting your push would throw them away.
+$ git pull --rebase
+$ git push
+- pull --rebase = get the new commits and place yours after them; then the push is a simple step forward
+!! Never solve this with `git push --force` on a shared branch. It deletes your teammates' commits on the remote.
 ? Which command never changes your files? | git pull | *git fetch | git merge
+^ https://git-scm.com/book/en/v2/Git-Basics-Working-with-Remotes Pro Git: working with remotes
 
 ## Safety
 # git-undo | Undoing things | Intermediate | reset, revert, stash and the reflog.
@@ -211,37 +337,65 @@ $ git push -u origin feature
 = Something went wrong
 + a b c
 : c err bug
-The last commit is wrong. First question: has anyone else seen it?
+The last commit is wrong. Before choosing a command, answer one question: **has anyone else got this commit?** (Did you push it?)
+| Pushed already? | Use |
+| No, only on my computer | `git reset`: rewrite your own history |
+| Yes, others may have it | `git revert`: add a new commit that undoes it |
 = Not shared: reset
 ~ c>b reset
+`git reset` moves your branch back to an earlier commit. The three modes differ in what happens to the changes of the removed commit:
 $ git reset --soft HEAD~1
+- --soft = undo the commit; its changes stay **staged**. Good for rewriting the message or adding a forgotten file
+- HEAD~1 = one commit before the current one
 $ git reset --mixed HEAD~1
+- --mixed = the default: undo the commit; changes stay in your files but are **unstaged**
 $ git reset --hard HEAD~1
-`--soft` keeps changes staged. `--mixed` (default) keeps them unstaged. `--hard` deletes them.
-!! `--hard` discards uncommitted work for good.
+- --hard = undo the commit and **delete** its changes from your files
+!! `--hard` also deletes any uncommitted work in your folder. Run `git status` first.
+= Just fix the last commit
+$ git commit --amend -m "Fix refund when the amount is zero"
+- --amend = replace the last commit with a new one: new message, plus anything you staged since
+Only amend commits you have not pushed. Amending creates a new commit ID, just like rebase.
 = Shared: revert
 + r
 ~ r>c opposite
-$ git revert <commit>
-Adds a new commit that cancels the old one. History stays intact, so it is safe on shared branches.
-= Stash
+$ git revert 3f9a2c1
+- git revert = create a **new** commit that does the exact opposite of the given commit
+- 3f9a2c1 = the ID of the commit to undo
+History is not rewritten: the bad commit and its undo are both visible. Everyone can simply pull. This is the safe choice for `main` and any shared branch.
+= Stash: put work aside
 + s
-$ git stash push -m "half done"
+You are halfway through something and must switch to an urgent fix. Do not commit half-done work; stash it:
+$ git stash push -m "half-done search box"
+- stash push = save your uncommitted changes in a shelf and clean the working tree
+- -m = a note so you can recognise it later
+$ git stash list
+- list = show everything on the shelf
 $ git stash pop
-Shelves uncommitted work so you can switch task.
-= Reflog
+- pop = put the latest stashed changes back and remove them from the shelf
+= Reflog: the safety net
 + l
 ~ l>c still here
+Git records every place HEAD has been on your computer: every commit, reset, rebase and switch. Commits that seem lost after a bad reset are still there for weeks.
 $ git reflog
-$ git switch -c rescue HEAD@{2}
-The reflog records where HEAD has been on your machine. Commits that look lost can usually be recovered for weeks.
-= Find the culprit
+> 3f9a2c1 HEAD@{0}: reset: moving to HEAD~1
+> 9d41b07 HEAD@{1}: commit: Add search box
+$ git switch -c rescue HEAD@{1}
+- HEAD@{1} = where HEAD was one step ago in the reflog
+- switch -c rescue = create a branch there, so the commit is safe again
+= Find the commit that broke it
 * c
+`git bisect` finds the guilty commit by halving the range each time: about 10 tests for 1,000 commits.
 $ git bisect start
 $ git bisect bad
+- bisect bad = the current commit has the bug
 $ git bisect good v1.4
-Bisect halves the range each time: about 10 tests for 1000 commits. `git blame` shows who last changed each line.
+- bisect good v1.4 = version 1.4 did not have it
+Git checks out a commit in the middle; you test and answer `git bisect good` or `git bisect bad` until it names the culprit. Finish with `git bisect reset`.
+$ git blame app.js
+- git blame = show, for every line, the last commit and author that changed it
 ? Safe way to undo a commit others already pulled? | reset --hard | *revert | stash
+^ https://git-scm.com/book/en/v2/Git-Basics-Undoing-Things Pro Git: undoing things
 
 # git-flow | Branching strategies | Intermediate | Trunk-based, GitHub Flow and Git Flow.
 @ m flag 0 0 main
@@ -253,24 +407,45 @@ Bisect halves the range each time: about 10 tests for 1000 commits. `git blame` 
 = GitHub Flow
 + m f1 pr prod
 ~ m>f1 branch ;; f1>pr pull request ;; pr>prod merge
-Branch from main, open a pull request, review, merge, deploy. Simple, and right for most web services.
-= Trunk-based
+The simplest common strategy:
+- create a branch from `main` for each task;
+- push it and open a **pull request**;
+- teammates review, automated tests run;
+- merge into `main`, and `main` is deployed.
+Right for most web services, where there is only one live version.
+= Trunk-based development
 * m
 ~ f1>m hours
-Everyone merges to main at least daily. Unfinished work hides behind **feature flags**. It needs strong automated tests, and is what continuous integration really means.
+Everyone merges small changes into `main` (the "trunk") at least once a day. Branches live for hours, not weeks.
+- Unfinished features are hidden behind **feature flags**: code that is deployed but switched off.
+- It needs strong automated tests, because `main` must always work.
+- It is what continuous integration originally meant: integrating continuously.
 = Git Flow
 + dev rel
 ~ dev>rel ;; rel>m
-Long-lived `develop` and `main`, plus release and hotfix branches. Suits products with several supported versions; heavy for a website.
+Long-lived `main` (released versions) and `develop` (next version), plus short branches for features, releases and urgent hotfixes.
+Suits products where several versions are supported at once, such as installed software or mobile apps. For a website it is usually heavier than needed.
+= Which one?
+| Team and product | Good fit |
+| Web service, deployed often | GitHub Flow or trunk-based |
+| Very frequent releases, strong tests | Trunk-based |
+| Installed software with old versions to support | Git Flow or release branches |
 = Tags and versions
 : m info v2.3.1
 $ git tag -a v2.3.1 -m "Release 2.3.1"
+- -a = annotated tag, with author, date and message
+- v2.3.1 = the version name
 $ git push origin v2.3.1
-Semantic versioning: MAJOR breaks, MINOR adds, PATCH fixes.
+- push origin v2.3.1 = send the tag; normal pushes do not send tags
+**Semantic versioning** (MAJOR.MINOR.PATCH): raise MAJOR when something breaks for users, MINOR when you add something compatible, PATCH for fixes.
 = Good commits | PRACTICE
 * f1
-One idea each, imperative subject: "Add retry to payment client". Conventional Commits adds a type: `feat:`, `fix:`, `docs:`.
+- One idea per commit.
+- Subject line under about 50 characters, in the imperative: "Add retry to payment client", not "added retries".
+- A blank line, then the body: why the change was needed.
+**Conventional Commits** add a type in front, which tools can use to build changelogs: `feat: add search`, `fix: handle empty cart`, `docs: explain setup`.
 ? Trunk-based development hides unfinished work with... | long branches | *feature flags | tags
+^ https://www.atlassian.com/git/tutorials/comparing-workflows Comparing Git workflows
 
 # git-advanced | Hooks, worktrees, submodules, LFS | Advanced | Tools for larger repositories.
 @ r db 1 0 Repository
@@ -281,28 +456,50 @@ One idea each, imperative subject: "Add retry to payment client". Conventional C
 = Hooks
 + r h
 ~ h>r checks
-Scripts Git runs at set moments: `pre-commit`, `commit-msg`, `pre-push`. Local hooks can be skipped, so repeat important checks in CI.
+**Hooks** are scripts Git runs automatically at certain moments. They live in `.git/hooks/`.
+- `pre-commit`: before a commit is made, for example to run a code formatter.
+- `commit-msg`: checks the message format.
+- `pre-push`: runs tests before anything is uploaded.
+Hooks on your computer can be skipped with `--no-verify`, so important checks must also run on the server, in CI.
 = Worktrees
 + w
 ~ r>w
 $ git worktree add ../hotfix main
-A second working folder on another branch, sharing one repository. No stashing needed.
+- git worktree add = create a second working folder linked to the same repository
+- ../hotfix = where to create the folder
+- main = which branch to check out there
+Now you can fix a bug in `../hotfix` while your half-done work stays untouched in the first folder. No stashing needed.
 = Submodules
 + s
 ~ r>s pinned commit
+A **submodule** puts another repository inside yours, pinned to an exact commit.
 $ git submodule update --init --recursive
-A submodule pins another repository at an exact commit. A package manager is usually simpler.
+- submodule update = download the pinned commits of all submodules
+- --init = set up submodules that were never initialised
+- --recursive = also submodules inside submodules
+Submodules are easy to get wrong. A package manager (npm, pip, Maven) is usually the simpler way to share code.
 = Large files
 + l
 ~ r>l pointer
-Git LFS keeps big binaries outside history and stores small pointers.
+Git keeps every version of every file forever, so large binaries such as videos or design files make the repository huge. **Git LFS** stores them on a separate server and puts small pointer files in history.
 $ git lfs track "*.psd"
+- lfs track = store files matching this pattern in LFS
+- "*.psd" = every Photoshop file; quotes stop the shell from expanding `*`
 = Huge repositories
 * r
-$ git clone --filter=blob:none <url>
+$ git clone --filter=blob:none https://github.com/acme/monorepo.git
+- --filter=blob:none = partial clone: download history now, but file contents only when you need them
 $ git sparse-checkout set services/payments
-Partial clone downloads contents when needed; sparse checkout shows only some folders.
+- sparse-checkout set = show only these folders in the working tree
+Together they make a repository of many gigabytes usable on a laptop.
 = Leaked a secret? | RISK
 : r err key in history
-Removing it in a new commit is not enough: history still has it. **Revoke the key first**, then clean history with `git filter-repo`.
+Deleting a password in a new commit is not enough: the old commit still contains it, and anyone with a clone can read it.
+1. **Revoke the secret first**: change the password or delete the key. Assume it is already copied.
+2. Then remove it from history:
+$ git filter-repo --path config/secrets.env --invert-paths
+- filter-repo = rewrite history (a separate tool, recommended by Git over the old filter-branch)
+- --path … --invert-paths = keep everything **except** this file in every commit
+Everyone must clone again afterwards, because all commit IDs change.
 ? First action after pushing a secret? | Delete the file | *Revoke the secret | Rename the branch
+^ https://git-scm.com/book/en/v2/Customizing-Git-Git-Hooks Pro Git: hooks

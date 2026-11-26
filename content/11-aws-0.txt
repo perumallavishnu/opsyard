@@ -63,6 +63,48 @@ Accounts opened since July 2025 get a credit-based free plan. The catalogue hold
 ^ https://aws.amazon.com/blogs/aws/twenty-years-of-amazon-s3-and-building-whats-next/ Twenty years of Amazon S3
 ^ https://aws.amazon.com/about-aws/our-origins/ AWS: Our origins
 
+## Getting started
+# c-awscli | Account, regions and the AWS CLI | Beginner | Signing in safely and talking to AWS from the terminal.
+@@ user You ; laptop AWS CLI ; cloud AWS regions ; key Credentials
+= Without it | PROBLEM
+Clicking in the web console is fine for looking around, but it cannot be repeated exactly, scripted or reviewed. And if you use the account's first login (the **root user**) for daily work, one stolen password gives away everything.
+= What it is | SOLUTION
+- An **AWS account** is a container for resources and bills. The email that created it is the **root user**: all-powerful, for emergencies only.
+- A **region** is a geographic area, such as `ap-south-1` (Mumbai) or `eu-west-1` (Ireland). Each has several **Availability Zones** (AZs): separate data centres a few kilometres apart.
+- The **AWS CLI** is a command-line tool that calls the same APIs as the console.
+Most services are regional: a server created in Mumbai does not appear when the console shows Ireland.
+= Secure the account first
+1. Turn on **MFA** (a second factor) for the root user, then put root aside.
+2. Set up **IAM Identity Center** and create a user for yourself with admin rights; sign in with that.
+3. Create a **budget alert** so a forgotten resource cannot surprise you.
+!! Never create access keys for the root user.
+= Install the CLI and sign in
+$ aws --version
+- aws --version = confirm the CLI (version 2) is installed
+$ aws configure sso
+- configure sso = set up sign-in through IAM Identity Center; it asks for your start URL and region and saves a **profile**
+$ aws sso login --profile dev
+- sso login = open the browser to sign in; the CLI receives temporary credentials, valid for hours
+- --profile dev = which saved profile to use
+= Your first commands
+$ aws sts get-caller-identity --profile dev
+- sts get-caller-identity = "who am I?": shows your account number and identity. The first thing to run when something says "access denied"
+$ aws ec2 describe-regions --query "Regions[].RegionName" --output table
+- ec2 describe-regions = list the regions
+- --query "Regions[].RegionName" = pick only the names from the answer (JMESPath syntax)
+- --output table = print as a table; `json` and `text` also work
+Every CLI command follows the same shape: `aws <service> <action> --option value`.
+= Environment variables and profiles
+$ export AWS_PROFILE=dev
+$ export AWS_REGION=ap-south-1
+- AWS_PROFILE = use this profile without typing `--profile` each time
+- AWS_REGION = the default region for commands
+Keep separate profiles for each account (dev, staging, prod), so a command can never reach production by accident.
+= Real-time example | PRACTICE
+A student creates a free account, leaves root with an access key, and pushes it to a public GitHub repository by mistake. Within an hour bots start expensive servers for crypto mining. Another student sets MFA on root, signs in through Identity Center with temporary credentials, and sets a 10-dollar budget alert: there are no long-lived keys to leak.
+? What should you use the root user for? | Daily work | *Only rare account tasks, with MFA | Running servers
+^ https://docs.aws.amazon.com/cli/latest/userguide/getting-started-quickstart.html AWS CLI quick start
+
 ## Identity and security services
 # c-iam | IAM: who may do what | Beginner | The service every other service asks first.
 @@ user Employee ; gate IAM ; db Company data ; doc Policy
@@ -70,292 +112,659 @@ Accounts opened since July 2025 get a credit-based free plan. The catalogue hold
 " a I just wanted to look.
 Everyone would share one all-powerful login. A trainee could delete the database by mistake, and nobody could tell who did it. One leaked password would mean losing everything.
 = What it is | SOLUTION
-**Identity and Access Management** checks every request: who are you, and are you allowed to do this? It has no extra charge.
-= How it solves it
+**Identity and Access Management** checks every single AWS request: **who** are you, and are you **allowed** to do this? It has no extra charge.
 | Part | Meaning |
-| User | One person or program with long-term keys |
+| User | One person or program with long-term credentials (avoid for people; use Identity Center) |
 | Group | A set of users, for example Developers |
-| Role | Temporary permissions anyone trusted can take on |
-| Policy | JSON text that allows or denies actions |
-Everything is denied until a policy allows it. An explicit deny always wins.
+| Role | A set of permissions that a trusted person, service or server can take on **temporarily** |
+| Policy | A JSON document that allows or denies actions on resources |
+Everything is **denied** until a policy allows it, and an explicit **deny** always wins.
+= Read a policy
+> {
+>   "Version": "2012-10-17",
+>   "Statement": [{
+>     "Effect": "Allow",
+>     "Action": ["s3:GetObject"],
+>     "Resource": "arn:aws:s3:::acme-docs/*"
+>   }]
+> }
+- Version = the policy language version; always this date
+- Effect = Allow or Deny
+- Action = which API calls; `s3:GetObject` means "download an object"
+- Resource = which things, by **ARN** (Amazon Resource Name); `/*` = every object in the bucket
+A **Condition** block can add rules such as "only from our office IP" or "only with MFA".
+= Roles: no stored passwords
+A web server on EC2 needs to read that bucket. Instead of putting keys on it, you attach a **role** with the policy above. The server receives temporary credentials automatically, renewed every hour.
+$ aws iam create-role --role-name web-reader --assume-role-policy-document file://trust.json
+- create-role = make a role
+- --assume-role-policy-document = the **trust policy**: who may take on this role (here, the EC2 service)
+- file://trust.json = read the JSON from a local file
+$ aws iam attach-role-policy --role-name web-reader --policy-arn arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+- attach-role-policy = give the role a policy; here an AWS-managed read-only one
+= Check what is allowed
+$ aws iam simulate-principal-policy --policy-source-arn arn:aws:iam::111122223333:role/web-reader --action-names s3:DeleteObject
+- simulate-principal-policy = ask IAM "would this identity be allowed this action?" without doing it
+**IAM Access Analyzer** finds resources shared outside your account and suggests tighter policies from real usage.
 = Real-time example | PRACTICE
-A shop has three groups: Developers may change test servers, Finance may read bills, Support may read orders. The web server has a **role** that lets it read one bucket, so no password is stored on it.
+A shop has three groups: Developers may change test servers, Finance may read bills, Support may read orders. The web servers use a **role** that can read one bucket. When an employee leaves, one account is disabled, and no password stored on any server has to change.
 = Rules to keep | RISK
-MFA on the root user, no root access keys, roles instead of keys, the least permission that works.
+- MFA on the root user, and no root access keys.
+- People sign in through Identity Center; programs use roles.
+- Give the least permission that works, then tighten it with Access Analyzer.
+- Never put access keys in code or images.
 ? A server needs to read a bucket. Give it... | the root password | *a role | a user's keys
 ^ https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html IAM User Guide
 
 # c-kms | KMS and Secrets Manager | Intermediate | Locking data, and keeping passwords out of code.
 @@ server App ; key KMS / Secrets ; db Encrypted data ; doc Audit log
 = Without it | PROBLEM
-Database passwords sit in code and configuration files. A stolen disk or backup can be read by anyone.
+Database passwords sit in code and configuration files, copied to every laptop. A stolen disk or backup can be read by anyone who finds it.
 = What they are | SOLUTION
-**KMS** creates and guards encryption keys; the key material does not leave it unencrypted. **Secrets Manager** stores passwords and can rotate them. **Parameter Store** is a simpler place for settings.
-= How it works
-The app asks with its role, IAM checks, KMS decrypts. Each use is recorded in CloudTrail.
+- **KMS** (Key Management Service) creates and guards encryption keys. The key material never leaves KMS unencrypted; you ask KMS to encrypt or decrypt, and IAM decides who may.
+- **Secrets Manager** stores secrets such as database passwords and API keys, and can **rotate** them automatically.
+- **Systems Manager Parameter Store** is a simpler, cheaper place for settings and secrets without rotation.
+Most AWS storage services (S3, EBS, RDS) encrypt with KMS keys at the tick of a box.
+= Store and read a secret
+$ aws secretsmanager create-secret --name prod/shop/db --secret-string '{"user":"shop","password":"S3cure!"}'
+- create-secret = store a new secret
+- --name prod/shop/db = a path-like name, which makes permissions by prefix easy
+- --secret-string = the value, here JSON with two fields
+$ aws secretsmanager get-secret-value --secret-id prod/shop/db --query SecretString --output text
+- get-secret-value = read it (the caller needs permission)
+- --query SecretString --output text = print only the value
+Applications call the same API at start-up with their role; nothing secret is in the code or image.
+= Encrypt with your own key
+$ aws kms create-key --description "Patient records"
+- create-key = a customer-managed key; you control its policy and can disable it
+$ aws kms encrypt --key-id alias/patients --plaintext fileb://note.txt
+- encrypt = KMS returns encrypted bytes; only callers allowed by the key policy can decrypt
+- fileb:// = read the file as raw bytes
+Every use of a key is recorded in **CloudTrail**: who decrypted what, and when.
 = Real-time example | PRACTICE
-A clinic encrypts its patient database with its own KMS key. When an employee leaves, rights to use the key are removed, and copied data becomes unreadable for them.
+A clinic encrypts its patient database with its own KMS key. When a contractor leaves, their right to use the key is removed. Copies of the data they might have taken are unreadable without the key, and CloudTrail shows every decryption made while they had access.
 ? Where should a database password live? | In the code | *Secrets Manager | In a wiki
+^ https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html Secrets Manager User Guide
 
 ## Compute services
 # c-ec2 | EC2: virtual servers | Beginner | A computer you rent.
 @@ user Developer ; server EC2 instance ; team Visitors ; layer AMI
 = Without it | PROBLEM
 " a I need a server today, for a week.
-You would have to buy a machine, wait for it, install it, and keep paying after the project ends.
+You would have to buy a machine, wait weeks for delivery, install it, find room for it, and keep paying after the project ends.
 = What it is | SOLUTION
-**Elastic Compute Cloud** gives you virtual servers, called instances, with the CPU, memory and system you choose, billed while they run.
-= How it works
-An **AMI** is the starting disk image. The **instance type** is the size. A **key pair** or Session Manager lets you in. A **security group** is its firewall. **EBS** is its disk.
-$ aws ec2 run-instances --image-id ami-123 --instance-type t4g.small
+**Elastic Compute Cloud** rents you virtual servers, called **instances**, with the CPU, memory and operating system you choose, billed per second while they run.
+| Part | Meaning |
+| AMI | Amazon Machine Image: the starting disk (Ubuntu, Amazon Linux, Windows, or your own) |
+| Instance type | The size: `t4g.small` = family t (burstable), generation 4, g = Graviton (ARM), size small |
+| EBS volume | The instance's network disk |
+| Security group | Its firewall |
+| Key pair / Session Manager | How you log in |
+| User data | A script that runs on first boot |
+= Launch an instance
+$ aws ec2 run-instances --image-id ami-0abc123 --instance-type t4g.small --subnet-id subnet-0a1 --security-group-ids sg-0b2 --iam-instance-profile Name=web-role --count 1 --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=web-1}]'
+- run-instances = start new instances
+- --image-id = the AMI to start from
+- --instance-type = the size
+- --subnet-id = which network (and so which Availability Zone)
+- --security-group-ids = which firewall rules apply
+- --iam-instance-profile Name=web-role = attach a role, so the server needs no keys
+- --count 1 = how many
+- --tag-specifications = add a Name tag, shown in the console
+= Connect and manage
+$ aws ssm start-session --target i-0123456789abcdef0
+- ssm start-session = a shell on the instance through Session Manager: no open SSH port, no keys, every session logged
+$ aws ec2 stop-instances --instance-ids i-0123456789abcdef0
+- stop-instances = shut it down; you stop paying for compute but still pay for its disk
+$ aws ec2 terminate-instances --instance-ids i-0123456789abcdef0
+- terminate-instances = delete it; its root disk is deleted too by default
+= Pricing options
+| Option | Good for |
+| On-Demand | Anything, no commitment |
+| Savings Plans / Reserved | Steady use for 1 or 3 years, much cheaper |
+| Spot | Interruptible work (batch, CI), up to about 90% cheaper |
 = Real-time example | PRACTICE
-A school runs its exam portal on two instances. In exam week it starts six more, then stops them.
-= When not to use it
-You must patch and watch it. For short tasks use Lambda; for containers, Fargate.
+A school runs its exam portal on two instances. In exam week an Auto Scaling group starts six more; afterwards it stops them. They pay for the extra servers only during that week.
+= When not to use it | RISK
+With EC2 you patch the operating system, watch the disk and handle failures yourself. For short tasks use **Lambda**; for containers, **Fargate**; for a simple web app, **App Runner** or Beanstalk.
 ? What is an AMI? | A firewall | *A starting disk image | A price
+^ https://docs.aws.amazon.com/ec2/ EC2 documentation
 
 # c-asg | Auto Scaling | Beginner | The right number of servers, all the time.
 @@ team Visitors ; gear Auto Scaling ; server Servers ; gauge CloudWatch
 = Without it | PROBLEM
-At 3 a.m. traffic doubles. Someone has to wake up and add servers, or users see errors.
+At 8 p.m. traffic triples. Someone has to notice and add servers, or users see errors. At midnight someone must remove them again, or the company pays for idle machines. And a crashed server stays crashed until someone replaces it.
 = What it is | SOLUTION
-An **Auto Scaling group** keeps the number of instances between a minimum and a maximum and replaces broken ones.
-= How it works
-A **launch template** says what to start. **CloudWatch** measures. A **policy** such as "keep CPU near 50%" adds or removes.
+An **Auto Scaling group** (ASG) keeps the number of EC2 instances between a **minimum** and a **maximum**:
+- it **replaces** instances that fail health checks;
+- it **adds** instances when demand rises and **removes** them when it falls;
+- it spreads instances across Availability Zones.
+A **launch template** describes what to start: AMI, instance type, security groups, role, user data.
+= Create a group
+$ aws autoscaling create-auto-scaling-group --auto-scaling-group-name web --launch-template LaunchTemplateName=web,Version='$Latest' --min-size 2 --max-size 10 --desired-capacity 2 --vpc-zone-identifier "subnet-0a1,subnet-0b2" --target-group-arns arn:aws:elasticloadbalancing:...:targetgroup/web/abc --health-check-type ELB
+- --launch-template … Version='$Latest' = what to start, using the newest template version
+- --min-size 2 --max-size 10 = never fewer than 2, never more than 10
+- --desired-capacity 2 = start with 2
+- --vpc-zone-identifier = subnets in different zones to spread across
+- --target-group-arns = register new instances with the load balancer automatically
+- --health-check-type ELB = replace instances the load balancer considers unhealthy
+= Scale on a target
+$ aws autoscaling put-scaling-policy --auto-scaling-group-name web --policy-name cpu50 --policy-type TargetTrackingScaling --target-tracking-configuration '{"PredefinedMetricSpecification":{"PredefinedMetricType":"ASGAverageCPUUtilization"},"TargetValue":50}'
+- TargetTrackingScaling = keep a metric near a target, like a thermostat
+- ASGAverageCPUUtilization … 50 = add or remove instances to keep average CPU around 50%
+**Scheduled** scaling handles known peaks ("at 7 p.m. set desired to 8"); **predictive** scaling learns daily patterns.
+= Update without downtime
+$ aws autoscaling start-instance-refresh --auto-scaling-group-name web
+- start-instance-refresh = replace instances gradually with the latest launch template, keeping a healthy minimum
 = Real-time example | PRACTICE
-A food delivery company has 4 servers in the afternoon, 20 at dinner time, 4 again at midnight, without anyone touching it.
+A food delivery company runs 4 servers in the afternoon, 20 at dinner time and 4 again after midnight, without anyone touching it. One night a server's disk fails; the group replaces it within minutes.
 ? What replaces a broken instance? | You, by hand | *The Auto Scaling group | S3
+^ https://docs.aws.amazon.com/autoscaling/ec2/userguide/what-is-amazon-ec2-auto-scaling.html EC2 Auto Scaling User Guide
 
 # c-elb | Elastic Load Balancing | Beginner | One address, many servers.
 @@ team Visitors ; router Load balancer ; server Server 1 ; server Server 2
 = Without it | PROBLEM
-All visitors go to one server. It is overloaded, and when it fails the site is gone.
+All visitors go to one server. It is overloaded at peak times, and when it fails, the site is gone. Updating it means downtime.
 = What it is | SOLUTION
-A load balancer takes every request and passes it to a healthy server.
-= How it works
-It calls a **health check** on each target and stops using those that fail.
-| Type | For |
-| ALB | HTTP: paths, hosts |
-| NLB | TCP, UDP, very high rates |
-| GWLB | Network appliances |
+A load balancer has one stable address, receives every request and passes it to a **healthy** target.
+| Type | Works at | Use for |
+| ALB (Application) | HTTP/HTTPS | Websites and APIs; route by path or host name |
+| NLB (Network) | TCP/UDP/TLS | Very high rates, fixed IP addresses, non-HTTP |
+| GWLB (Gateway) | Network packets | Firewalls and inspection appliances |
+= How an ALB is put together
+- A **listener** waits on a port (443) with a TLS certificate from **ACM** (AWS Certificate Manager, free).
+- **Rules** decide where requests go: `/api/*` to one target group, everything else to another.
+- A **target group** is a set of targets (instances, IPs, Lambda functions) with a **health check**.
+= Health checks
+> Path: /health   Interval: 15 s   Healthy after: 3 passes   Unhealthy after: 2 failures
+- Path = which URL the load balancer calls on each target
+- Interval = how often
+- Healthy / Unhealthy thresholds = how many results in a row change the state
+$ aws elbv2 describe-target-health --target-group-arn arn:aws:elasticloadbalancing:...:targetgroup/web/abc
+- describe-target-health = which targets are healthy, and why not ("Health checks failed with these codes: 502")
 = Real-time example | PRACTICE
-A news site sends `/api` to one group of servers and everything else to another, and updates one server at a time without downtime.
+A news site's ALB sends `/api/*` to one group of servers and everything else to another. During a release, servers are updated one at a time: each is taken out of its target group, updated, checked and put back. Readers never see an error.
 ? What does a health check do? | Encrypts | *Finds targets that must not get traffic | Scales the database
+^ https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html ALB User Guide
 
 # c-lambda | Lambda: code without servers | Intermediate | Run a function when something happens.
 @@ user User ; small Lambda ; db Result ; flag Event
 = Without it | PROBLEM
-A server runs all day to resize ten photos. You pay for 24 hours and patch it too.
+A server runs 24 hours a day to resize the ten photos users upload. You pay for the whole day, patch its operating system, and it still cannot cope when 10,000 photos arrive at once.
 = What it is | SOLUTION
-**Lambda** runs your function when an event arrives and bills for the time it runs.
-= How it works
-Events come from S3, API Gateway, SQS, a schedule and more. Each run has up to 15 minutes. Many events run in parallel.
+**Lambda** runs your **function** when an **event** arrives, and bills per request and per millisecond of run time. There is no server to manage, and many events run in parallel automatically.
+- Events: an upload to S3, an HTTP request through API Gateway or a function URL, a message in SQS, a schedule from EventBridge, and many more.
+- Limits: up to 15 minutes per run, up to 10 GB of memory (CPU grows with memory).
+= A function
+> export const handler = async (event) => {
+>   const key = event.Records[0].s3.object.key;
+>   console.log('New upload', key);
+>   return { ok: true };
+> };
+- handler = the function Lambda calls
+- event = details of what happened; here the S3 upload, including the object's key
+- console.log = goes to CloudWatch Logs automatically
+= Deploy and call it
+$ zip fn.zip index.mjs
+$ aws lambda create-function --function-name resize --runtime nodejs22.x --handler index.handler --zip-file fileb://fn.zip --role arn:aws:iam::111122223333:role/resize-role
+- --runtime nodejs22.x = the language and version
+- --handler index.handler = file `index`, exported function `handler`
+- --zip-file fileb://fn.zip = the code
+- --role = the role whose permissions the function has
+$ aws lambda invoke --function-name resize --payload '{"test":1}' --cli-binary-format raw-in-base64-out out.json
+- invoke = run it once with a test event; the result is written to out.json
+= Cold starts
+When a function has not run recently, Lambda must start a new environment first: a **cold start** of tens to hundreds of milliseconds. Usually fine; for strict latency use **provisioned concurrency** or **SnapStart**.
 = Real-time example | PRACTICE
-A travel site: each uploaded photo triggers a function that makes three sizes. On quiet days the cost is close to nothing.
-= When not to use it
-Long jobs, steady heavy traffic, or special hardware are often cheaper or simpler on containers.
+A travel site: each uploaded photo triggers a function that makes three sizes and saves them back to S3. On a quiet day the bill is a few cents; on a busy holiday it handles thousands of uploads a minute without any change.
+= When not to use it | RISK
+Jobs longer than 15 minutes, steady heavy traffic all day, or special hardware (GPUs) are often cheaper or simpler on containers.
 ? Longest single run? | 1 minute | *15 minutes | 1 day
+^ https://docs.aws.amazon.com/lambda/latest/dg/welcome.html Lambda Developer Guide
 
 # c-ecs | ECR, ECS, Fargate and EKS | Intermediate | Where containers live and run.
 @@ gear CI ; bucket ECR ; board ECS or EKS ; cloud Fargate
 = Without them | PROBLEM
-You have twenty container images on laptops and start them by hand on servers. Nobody knows which version runs where.
+You have twenty container images built on laptops and start them by hand on servers. Nobody knows which version runs where, and a crashed container stays down.
 = What they are | SOLUTION
-**ECR** stores images. **ECS** runs containers the AWS way. **EKS** is managed Kubernetes. **Fargate** runs containers with no servers to manage.
-= How they fit
-CI pushes to ECR. A service in ECS or EKS keeps the wanted number of copies running and replaces failed ones.
+| Service | Job |
+| ECR | Elastic Container Registry: stores your images, scans them |
+| ECS | Elastic Container Service: runs containers, the AWS way; simpler than Kubernetes |
+| EKS | Elastic Kubernetes Service: managed Kubernetes control plane |
+| Fargate | Runs ECS or EKS containers without servers to manage |
+ECS and EKS can run on your own EC2 instances or on Fargate.
+= Push an image to ECR
+$ aws ecr create-repository --repository-name shop --image-scanning-configuration scanOnPush=true
+- create-repository = a new image repository
+- scanOnPush=true = scan every pushed image for vulnerabilities
+$ aws ecr get-login-password | docker login --username AWS --password-stdin 111122223333.dkr.ecr.ap-south-1.amazonaws.com
+- get-login-password = a temporary registry password, piped straight into docker login
+- --username AWS = always this user name for ECR
+$ docker push 111122223333.dkr.ecr.ap-south-1.amazonaws.com/shop:1.8.2
+= ECS words
+- **Task definition** = like a Docker Compose service: image, CPU, memory, ports, environment, role.
+- **Task** = one running copy of a task definition.
+- **Service** = keeps N tasks running, replaces failed ones, registers them with a load balancer, and does rolling updates.
+- **Cluster** = a logical group of services.
+$ aws ecs update-service --cluster prod --service shop --force-new-deployment
+- update-service … --force-new-deployment = restart tasks with a fresh pull, for example after updating the task definition
 = Real-time example | PRACTICE
-A team of five uses ECS on Fargate. A company with forty services and Kubernetes skills uses EKS.
+A team of five runs eight services on ECS with Fargate: no servers, no cluster to upgrade. A company with forty services, several teams and Kubernetes skills uses EKS, so they can use Helm, Argo CD and the Kubernetes ecosystem.
 ? Which one stores images? | ECS | *ECR | Fargate
+^ https://docs.aws.amazon.com/AmazonECS/latest/developerguide/Welcome.html ECS Developer Guide
 
 # c-beanstalk | Elastic Beanstalk and Lightsail | Beginner | The simple ways to start.
 @@ user Beginner ; gear Beanstalk ; server Running app ; router Load balancer
 = Without it | PROBLEM
 " a I only want my app online.
-A beginner must learn networks, servers and load balancers before seeing a page.
+A beginner must learn VPCs, EC2, load balancers and Auto Scaling before seeing their first page online.
 = What it is | SOLUTION
-**Elastic Beanstalk** takes your code and creates servers, load balancer and scaling for you. **Lightsail** offers small servers at a fixed monthly price.
-= How it works
-You upload a version; it deploys, monitors and can roll back. The resources are normal EC2 and ELB that you can see.
+- **Elastic Beanstalk** takes your code (Node.js, Python, Java, .NET, PHP, Go, Docker) and creates the servers, load balancer, scaling and monitoring for you. The resources are ordinary EC2 and ELB that you can see and change.
+- **Lightsail** offers small virtual servers, databases and storage at a fixed monthly price, with a simple console.
+= Deploy with the EB CLI
+$ pip install awsebcli
+$ eb init -p node.js my-app
+- eb init = set up this folder as a Beanstalk application
+- -p node.js = the platform
+$ eb create my-app-prod
+- eb create = create an environment: EC2, load balancer, Auto Scaling, all configured
+$ eb deploy
+- eb deploy = upload a new version and roll it out
+$ eb logs
+- eb logs = fetch recent logs from the instances
 = Real-time example | PRACTICE
-A student puts a project online with Lightsail. A small company runs its internal portal on Beanstalk and later moves to ECS.
+A student puts a project online on a 5-dollar Lightsail server. A small company runs its internal portal on Beanstalk for two years, then moves to ECS when it needs more control, reusing what it learned about the underlying resources.
 ? Beanstalk creates... | hidden machines | *normal AWS resources for you | only storage
+^ https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/Welcome.html Elastic Beanstalk Developer Guide
 
 ## Storage services
 # c-s3 | S3: object storage | Beginner | Files of any amount, reachable by name.
 @@ user User ; bucket S3 bucket ; doc Files ; box Cheaper classes
 = Without it | PROBLEM
-Files fill the server's disk. If the server dies, the photos are gone. A second server cannot see them.
+Uploaded photos fill the web server's disk. If the server dies, the photos are gone. A second server cannot see them, and buying bigger disks never ends.
 = What it is | SOLUTION
-**Simple Storage Service** keeps objects (file plus information) in buckets. It is designed for 99.999999999% durability by storing copies in several zones.
-= How it works
-Each object has a **key** such as `2026/invoice-7.pdf`. **Versioning** keeps old copies. **Lifecycle rules** move old ones to cheaper classes. **Policies** say who may read.
-$ aws s3 cp invoice-7.pdf s3://acme-docs/2026/
+**Simple Storage Service** stores **objects** (a file plus metadata) in **buckets**. There is no folder tree and no size limit for the bucket; each object can be up to 5 TB.
+- Each object has a **key**, its full name, such as `2026/invoices/inv-7.pdf`. The `/` only looks like folders.
+- S3 is designed for 99.999999999% (eleven nines) durability by keeping copies across several Availability Zones.
+- Bucket names are global: no two AWS accounts can have the same bucket name.
+= Work with the CLI
+$ aws s3 mb s3://acme-docs-2026
+- s3 mb = "make bucket"
+$ aws s3 cp inv-7.pdf s3://acme-docs-2026/2026/invoices/
+- s3 cp = copy a local file to S3 (or back, if you swap the two)
+$ aws s3 ls s3://acme-docs-2026/2026/ --recursive --human-readable
+- s3 ls = list objects; --recursive = everything under that prefix; --human-readable = sizes in KB/MB
+$ aws s3 sync ./site s3://acme-site --delete
+- s3 sync = copy only new or changed files
+- --delete = also remove objects that no longer exist locally
+$ aws s3 presign s3://acme-docs-2026/2026/invoices/inv-7.pdf --expires-in 3600
+- s3 presign = a temporary link anyone can use to download this one object, valid for an hour
+= Versioning, lifecycle and classes
+- **Versioning** keeps every old version of an object, so an overwrite or delete can be undone.
+- **Lifecycle rules** move objects to cheaper **storage classes** after some days, or delete them.
+| Class | For |
+| Standard | Frequently used data |
+| Intelligent-Tiering | Unknown patterns; moves objects automatically |
+| Standard-IA | Rarely read, but needed quickly |
+| Glacier Instant / Flexible / Deep Archive | Archives; cheaper, slower to retrieve |
+$ aws s3api put-bucket-versioning --bucket acme-docs-2026 --versioning-configuration Status=Enabled
+- s3api = the lower-level commands with every option; here turn on versioning
 = Real-time example | PRACTICE
-A university stores lecture videos. New ones are in Standard; after 90 days they move to Infrequent Access, after two years to Glacier.
+A university stores lecture videos. New ones are in Standard; a lifecycle rule moves them to Standard-IA after 90 days and to Glacier Deep Archive after two years. Storage costs fall by more than half, and every video is still available.
 = Dangers | RISK
-A public bucket is a classic leak. Keep Block Public Access on and share through CloudFront or signed links.
+A bucket opened to the public is one of the most common data leaks. Keep **Block Public Access** turned on (the default), and share files through CloudFront or presigned links instead.
 ? S3 stores... | running programs | *objects in buckets | network rules
 ^ https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html S3 User Guide
 
 # c-ebs | EBS and EFS: disks and shared files | Beginner | The disk of one server, or a folder for many.
 @@ server Server ; db EBS disk ; folder EFS share ; bucket Snapshot
 = Without them | PROBLEM
-Data on an instance's temporary store disappears when the instance stops.
+Some instance types have **instance store** disks, physically attached and very fast, but their data disappears when the instance stops. A database there would lose everything on the next stop.
 = What they are | SOLUTION
-**EBS** is a network disk for an instance in one zone. **EFS** is a file system that many Linux servers mount together.
-= How it works
-An EBS **snapshot** copies a disk for backup or for another zone. You pick the type by speed: gp3 for general use, io2 for demanding databases.
-= Real-time example | PRACTICE
-A database server keeps data on EBS with nightly snapshots. Ten web servers share uploaded pictures through EFS.
+- **EBS** (Elastic Block Store) is a network disk for one instance at a time, in one Availability Zone. It survives stops and can be detached and attached to another instance.
+- **EFS** (Elastic File System) is a shared file system (NFS) that many Linux instances, in several zones, mount at the same time. It grows and shrinks automatically.
 | Need | Use |
-| Files by web address | S3 |
-| Disk of one server | EBS |
-| Folder for many servers | EFS |
+| Files by web address, any amount | S3 |
+| The disk of one server, such as a database | EBS |
+| A folder shared by many servers | EFS |
+= EBS volumes and snapshots
+| Type | For |
+| gp3 | General purpose; choose size, speed (IOPS) and throughput separately |
+| io2 | Demanding databases that need guaranteed IOPS |
+| st1 / sc1 | Large sequential reads (logs, big data), cheap |
+$ aws ec2 create-snapshot --volume-id vol-0abc123 --description "db nightly"
+- create-snapshot = a point-in-time copy of the volume, stored in S3 behind the scenes; only changed blocks are stored after the first
+$ aws ec2 create-volume --snapshot-id snap-0def456 --availability-zone ap-south-1b --volume-type gp3
+- create-volume --snapshot-id = a new disk from a snapshot, here in another zone
+**Data Lifecycle Manager** or **AWS Backup** take and delete snapshots on a schedule.
+= Mount EFS
+$ sudo mount -t efs fs-0abc123:/ /mnt/shared
+- mount -t efs = mount with the EFS helper (package `amazon-efs-utils`)
+- fs-0abc123:/ = the file system ID and its root
+- /mnt/shared = where it appears on this server
+= Real-time example | PRACTICE
+A database server keeps its data on a gp3 EBS volume with nightly snapshots kept for 30 days. Ten web servers share uploaded pictures through EFS, so a picture uploaded to one server is visible on all.
 ? Folder shared by ten Linux servers? | EBS | *EFS | IAM
+^ https://docs.aws.amazon.com/ebs/latest/userguide/what-is-ebs.html EBS User Guide
 
 ## Network services
 # c-vpc | VPC: your private network | Beginner | Walls and doors around your servers.
 @@ cloud Internet ; gate VPC ; server Private servers ; router Subnets
 = Without it | PROBLEM
-Your database would sit on a network where strangers can knock on every port.
+Your database would sit on a network where anyone on the internet can try every port, all day.
 = What it is | SOLUTION
-A **Virtual Private Cloud** is your own network with your own address range. You decide what can come in and go out.
-= How it works
+A **Virtual Private Cloud** is your own isolated network in AWS, with your own private address range, such as `10.0.0.0/16` (65,536 addresses). You decide what can come in and what can go out.
 | Part | Job |
-| Subnet | A slice of the network in one zone |
-| Route table | Where traffic goes |
-| Internet gateway | Door to the internet |
-| NAT gateway | Way out for private servers |
-| Security group | Firewall of a server |
-| Network ACL | Firewall of a subnet |
+| Subnet | A slice of the VPC in **one** Availability Zone, such as `10.0.1.0/24` |
+| Route table | Rules that say where traffic from a subnet goes |
+| Internet gateway | The door between the VPC and the internet |
+| NAT gateway | Lets private servers reach out (for updates) without being reachable from outside |
+| Security group | Firewall attached to each resource |
+| Network ACL | Optional firewall for a whole subnet |
+| VPC endpoint | Private path to AWS services such as S3, without the internet |
+= Public and private subnets
+- A **public** subnet has a route `0.0.0.0/0 → internet gateway`. Put load balancers and NAT gateways here.
+- A **private** subnet has no such route; its outgoing traffic goes through the NAT gateway. Put application servers and databases here.
+Use at least two Availability Zones, each with a public and a private subnet, so losing one data centre does not stop the system.
+= Build one with the CLI
+$ aws ec2 create-vpc --cidr-block 10.0.0.0/16
+- create-vpc --cidr-block = a new VPC with this address range
+$ aws ec2 create-subnet --vpc-id vpc-0abc --cidr-block 10.0.1.0/24 --availability-zone ap-south-1a
+- create-subnet = a subnet in one zone with part of the range
+$ aws ec2 create-internet-gateway
+$ aws ec2 attach-internet-gateway --vpc-id vpc-0abc --internet-gateway-id igw-0def
+- attach-internet-gateway = connect the door to the VPC
+$ aws ec2 create-route --route-table-id rtb-0123 --destination-cidr-block 0.0.0.0/0 --gateway-id igw-0def
+- create-route = "all other traffic goes to the internet gateway", which makes the subnet public
+In practice teams build VPCs with Terraform or CloudFormation; the CLI shows what each piece is.
 = Real-time example | PRACTICE
-A clinic: load balancer in public subnets, application and database in private subnets. Only the load balancer can be reached from outside.
+A clinic: load balancer in public subnets, application and database in private subnets across two zones. Only the load balancer can be reached from outside; the database has no route to or from the internet at all. **VPC Flow Logs** record every connection attempt for audits.
 ? The database belongs in a... | public subnet | *private subnet | bucket
 ^ https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html VPC User Guide
 
 # c-sg | Security groups | Beginner | The firewall on every server.
 @@ cloud Anyone ; shield Security group ; db Database ; server App
 = Without it | PROBLEM
-Robots scan the whole internet all day. An open database port is found within hours.
+Robots scan the whole internet all day long. An open database or SSH port is found and attacked within hours of being created.
 = What it is | SOLUTION
-A list of what may reach a resource: protocol, port, source. Anything not listed is refused. It is **stateful**: answers may leave.
-= How it works
-A rule can name **another security group** as the source: "only the app may reach the database", even as servers change.
+A **security group** is a firewall attached to a resource (an instance, a load balancer, a database). It is a list of **allow** rules: protocol, port and source. Anything not allowed is refused.
+- It is **stateful**: if a request is allowed in, its answer may go out automatically.
+- There are no deny rules; a resource can have several security groups.
+- By default, all outgoing traffic is allowed.
+= Rules that point at other groups
+The source of a rule can be **another security group** instead of an address:
+| Group | Inbound rule | From |
+| web-sg (load balancer) | TCP 443 | 0.0.0.0/0 (anyone) |
+| app-sg | TCP 8080 | web-sg |
+| db-sg | TCP 5432 | app-sg |
+"Only members of app-sg may reach the database", however many app servers there are and whatever their addresses.
+= With the CLI
+$ aws ec2 create-security-group --group-name db-sg --description "Database" --vpc-id vpc-0abc
+- create-security-group = a new, empty group (no inbound allowed yet)
+$ aws ec2 authorize-security-group-ingress --group-id sg-0db --protocol tcp --port 5432 --source-group sg-0app
+- authorize-security-group-ingress = add an inbound rule
+- --protocol tcp --port 5432 = PostgreSQL's port
+- --source-group sg-0app = only from resources in the app group
+$ aws ec2 describe-security-group-rules --filters Name=group-id,Values=sg-0db
+- describe-security-group-rules = list the rules of a group
 = Real-time example | PRACTICE
 : c ok 5432 from app only
-Web: 443 from anywhere. App: 8080 from the web group. Database: 5432 from the app group.
+Web: 443 from anywhere. App: 8080 from the web group. Database: 5432 from the app group. When an Auto Scaling group adds ten app servers at dinner time, they can reach the database at once, and nothing else can.
+!! Never allow `0.0.0.0/0` on SSH (22), RDP (3389) or database ports. Use Session Manager instead of SSH.
 ? Best source for the database rule? | 0.0.0.0/0 | *The app's security group | Your home IP
+^ https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html Security groups
 
 # c-r53 | Route 53 and CloudFront | Beginner | Finding your site, and bringing it close to users.
 @@ user Visitor ; router Route 53 ; cloud CloudFront ; bucket Origin
 = Without them | PROBLEM
-Visitors must remember a number such as 203.0.113.10, and someone far away waits for every picture to cross the ocean.
+Visitors would have to remember an address like 203.0.113.10, and a buyer in Brazil waits for every picture to travel from a server in Mumbai.
 = What they are | SOLUTION
-**Route 53** is DNS: it turns a name into an address. **CloudFront** is a content delivery network that keeps copies near users.
-= How it works
-Route 53 can send users to the nearest or the healthy region. CloudFront answers from an edge location and asks the origin only when it has no copy.
+- **Route 53** is AWS's DNS service: it turns names into addresses, registers domains, and checks endpoint health.
+- **CloudFront** is a **content delivery network** (CDN): it keeps copies of your content in hundreds of **edge locations** near users and fetches from your **origin** (S3, a load balancer) only when it has no fresh copy.
+= Route 53 records
+| Record | Example |
+| A / AAAA | `shop.example.com → 203.0.113.10` |
+| CNAME | `www → shop.example.com` |
+| Alias (AWS-specific) | `shop.example.com → my-alb-123.ap-south-1.elb.amazonaws.com`, also at the domain root |
+**Routing policies** go further: latency-based (nearest region), failover (to a standby if health checks fail), weighted (10% to a new version).
+$ aws route53 list-resource-record-sets --hosted-zone-id Z0123456789
+- list-resource-record-sets = all records in a hosted zone (one domain)
+= CloudFront
+$ aws cloudfront create-invalidation --distribution-id E1ABC2DEF --paths "/index.html" "/assets/*"
+- create-invalidation = tell edge locations to drop their copies of these paths, so users get the new version
+- --paths = which files; `/*` would be everything
+A **cache policy** decides how long copies are kept. Origin Access Control lets CloudFront read a private S3 bucket that the public cannot.
 = Real-time example | PRACTICE
-A shop in Mumbai with buyers in Brazil: pictures come from São Paulo, orders go to Mumbai.
+A shop in Mumbai sells to buyers in Brazil. Pictures come from the CloudFront edge in São Paulo in milliseconds; only the order itself travels to Mumbai. Route 53 health checks fail the site over to a standby region if Mumbai has a problem.
 ? CloudFront speeds a site by... | bigger servers | *copies near the visitor | fewer pages
+^ https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html CloudFront Developer Guide
 
 # c-apigw | API Gateway | Intermediate | A front door for your APIs.
 @@ user App user ; gate API Gateway ; small Functions ; shield Auth
 = Without it | PROBLEM
-Each service must check logins, limit abuse and log requests on its own, each a little differently.
+Each service must check logins, limit abusive clients, handle CORS and log requests on its own, each a little differently and some not at all.
 = What it is | SOLUTION
-One managed entrance for HTTP and WebSocket APIs.
-= How it works
-It checks identity, limits the rate, routes `/orders` to one function and `/users` to another, and logs.
+**API Gateway** is a managed entrance for HTTP, REST and WebSocket APIs. In front of Lambda functions, containers or any HTTP service, it:
+- checks identity (JWT from Cognito or another provider, IAM, API keys, custom authorisers);
+- limits request rates (**throttling**) and quotas per client;
+- routes `GET /orders` to one backend and `POST /users` to another;
+- logs every request and publishes metrics.
+**HTTP APIs** are simpler and cheaper; **REST APIs** have more features such as usage plans and request validation.
+= Create a quick HTTP API
+$ aws apigatewayv2 create-api --name orders --protocol-type HTTP --target arn:aws:lambda:ap-south-1:111122223333:function:orders
+- apigatewayv2 create-api = make an HTTP API
+- --protocol-type HTTP = the simpler, cheaper kind
+- --target = "quick create": send every request to this Lambda function
+The answer includes an `ApiEndpoint` URL you can call at once.
+= Throttling
+> Rate: 100 requests per second   Burst: 200
+- Rate = steady requests per second allowed
+- Burst = short spikes allowed above the rate
+Clients over the limit get **429 Too Many Requests** instead of overloading your backend.
 = Real-time example | PRACTICE
-A bus company sells its timetable data: each partner has a key and a limit of requests per day.
+A bus company sells its timetable data to partners. Each partner gets an API key and a usage plan: 10,000 requests per day. A partner with a buggy script that loops gets 429 errors, while everyone else is unaffected.
 ? API Gateway can... | store files | *limit request rates | train people
+^ https://docs.aws.amazon.com/apigateway/latest/developerguide/welcome.html API Gateway Developer Guide
 
 ## Database and messaging services
 # c-rds | RDS and Aurora | Beginner | A relational database someone else looks after.
 @@ server App ; db RDS ; db Standby ; bucket Backups
 = Without it | PROBLEM
-You install the database, patch it at night, test backups, and build a spare. Forget one and you lose data.
+You install the database, patch it at night, take and test backups, and build a standby server for failures. Forget one of these and you lose data or a weekend.
 = What it is | SOLUTION
-**RDS** runs PostgreSQL, MySQL, MariaDB, Oracle, SQL Server or Db2 for you. **Aurora** is Amazon's own engine, compatible with MySQL and PostgreSQL.
-= How it works
-Automatic backups allow restore to a point in time. **Multi-AZ** keeps a standby in another zone. **Read replicas** share reading.
+- **RDS** (Relational Database Service) runs PostgreSQL, MySQL, MariaDB, Oracle, SQL Server or Db2 for you: installation, patching, backups and failover.
+- **Aurora** is Amazon's own engine, compatible with MySQL and PostgreSQL, with storage shared across three zones and faster failover.
+You still design tables, write queries and choose the size.
+= Create a database
+$ aws rds create-db-instance --db-instance-identifier shop-db --engine postgres --engine-version 17 --db-instance-class db.t4g.medium --allocated-storage 50 --master-username shop --manage-master-user-password --multi-az --db-subnet-group-name private --vpc-security-group-ids sg-0db --backup-retention-period 7
+- --engine postgres --engine-version 17 = which database and version
+- --db-instance-class = the size
+- --allocated-storage 50 = 50 GB of disk
+- --manage-master-user-password = RDS creates the password and keeps it in Secrets Manager
+- --multi-az = keep a synchronous standby in another zone
+- --db-subnet-group-name private = place it in private subnets
+- --backup-retention-period 7 = keep daily backups for 7 days, with point-in-time restore
+= Availability and scale
+- **Multi-AZ**: if the primary fails, RDS switches to the standby in a minute or two. The app keeps using the same endpoint name.
+- **Read replicas**: extra copies for read-only queries, such as reports.
+- **Point-in-time restore**: create a new database as it was at any second within the retention period.
+$ aws rds restore-db-instance-to-point-in-time --source-db-instance-identifier shop-db --target-db-instance-identifier shop-db-restored --restore-time 2026-11-26T09:58:00Z
+- restore-…-to-point-in-time = a new instance with the data as it was at that moment, for example just before a bad delete
 = Real-time example | PRACTICE
-A hotel's bookings: on failure the standby takes over in a minute or two. The app reconnects to the same name.
+A hotel's booking database runs Multi-AZ. One night the primary's zone has a power problem. RDS fails over to the standby; the app reconnects to the same name after about a minute, and no booking is lost.
 ? Multi-AZ is for... | speed | *availability | lower price
+^ https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Welcome.html RDS User Guide
 
 # c-dynamo | DynamoDB and ElastiCache | Intermediate | Very fast lookups by key.
 @@ server App ; db DynamoDB ; small Cache ; team Users
 = Without them | PROBLEM
-Millions of users each ask for their own cart. One relational database becomes the bottleneck.
+Millions of users each read their own shopping cart many times a minute. One relational database becomes the bottleneck, and adding more power to it gets very expensive.
 = What they are | SOLUTION
-**DynamoDB** stores items found by key at any scale. **ElastiCache** keeps answers in memory (Valkey, Redis OSS, Memcached).
-= How it works
-You choose a **partition key** so data spreads evenly. Design from the questions you will ask, not from tables.
+- **DynamoDB** is a fully managed key-value and document database. It answers in single-digit milliseconds at any scale, with no servers or versions to manage.
+- **ElastiCache** keeps frequently used data in memory (Valkey, Redis OSS or Memcached) in front of a slower database.
+= DynamoDB keys
+- The **partition key** decides which partition stores an item; choose one with many different values (`userId`), so load spreads evenly.
+- An optional **sort key** orders items with the same partition key (`orderDate`), allowing ranges such as "this user's orders in November".
+- Design tables from the **questions you will ask**, not from entities as in SQL.
+$ aws dynamodb put-item --table-name carts --item '{"userId":{"S":"u42"},"items":{"N":"3"}}'
+- put-item = write one item
+- {"S":"u42"} = a value of type String; {"N":"3"} = a Number
+$ aws dynamodb get-item --table-name carts --key '{"userId":{"S":"u42"}}'
+- get-item --key = read one item by its key, the fastest kind of request
+= Caching
+**Cache-aside** is the common pattern: the app looks in the cache first; on a miss it reads the database and stores the answer in the cache with an expiry time (TTL). Popular answers are then served from memory.
 = Real-time example | PRACTICE
-A game keeps each player's state in DynamoDB and the top-100 list in the cache.
+A mobile game keeps each player's state in DynamoDB, keyed by player ID, and the top-100 leaderboard in a Valkey sorted set in ElastiCache. During a tournament, traffic grows twentyfold without any change.
 ? DynamoDB finds items by... | full text | *key | colour
+^ https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Introduction.html DynamoDB Developer Guide
 
 # c-sqs | SQS, SNS and EventBridge | Beginner | Let parts talk without waiting for each other.
 @@ server Shop ; queue SQS queue ; gear Worker ; bucket Dead letters
 = Without it | PROBLEM
-The shop calls the email service directly. Email is slow, so paying is slow. Email is down, so nobody can pay.
+The shop calls the email service directly after each order. When email is slow, paying is slow. When email is down, nobody can pay. One weak part takes the whole system with it.
 = What they are | SOLUTION
-**SQS**: a queue that holds messages until a worker takes them. **SNS**: one message to many receivers. **EventBridge**: routes events by rules.
-= How it works
-The worker deletes a message after success. After several failures it goes to a **dead-letter queue** for a person to check.
+| Service | Pattern |
+| SQS (Simple Queue Service) | A queue: messages wait until a worker takes them, one worker per message |
+| SNS (Simple Notification Service) | Publish and subscribe: one message is copied to many receivers |
+| EventBridge | An event bus: routes events by rules, also from AWS services and SaaS tools |
+The shop only puts a message in the queue and answers the buyer at once. Email workers process messages at their own pace.
+= Send and receive with SQS
+$ aws sqs send-message --queue-url https://sqs.ap-south-1.amazonaws.com/111122223333/orders --message-body '{"orderId":1009}'
+- send-message = put a message in the queue
+$ aws sqs receive-message --queue-url https://sqs…/orders --wait-time-seconds 20
+- receive-message = take up to 10 messages
+- --wait-time-seconds 20 = long polling: wait up to 20 seconds for a message instead of returning empty at once
+A received message becomes invisible to other workers for the **visibility timeout**. The worker must **delete** it after success; otherwise it reappears and is tried again.
+$ aws sqs delete-message --queue-url https://sqs…/orders --receipt-handle AQEB…
+= Failures and dead letters
+After a set number of failed attempts (`maxReceiveCount`), SQS moves a message to a **dead-letter queue** (DLQ), so one bad message does not block the others. Someone inspects the DLQ and replays messages once the bug is fixed.
+**FIFO** queues keep exact order and remove duplicates, at lower throughput; standard queues deliver at least once, so workers must handle a message arriving twice.
 = Real-time example | PRACTICE
-On sale day 50,000 orders arrive in an hour. The queue holds them; workers finish by lunch; no order is lost.
+On sale day 50,000 orders arrive in an hour. The queue holds them all; workers send confirmation emails steadily and finish by lunch. Three malformed messages land in the DLQ, are fixed and replayed. No order is lost.
 ? One message to many receivers? | SQS | *SNS | S3
+^ https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html SQS Developer Guide
 
 ## Management and delivery services
 # c-cw | CloudWatch and CloudTrail | Beginner | What is happening, and who did it.
 @@ server Workload ; gauge CloudWatch ; user On-call ; doc CloudTrail
 = Without them | PROBLEM
 " c Customers told us first.
-You learn about failures from customers, and cannot say who opened the firewall.
+You learn about failures from angry customers, and when a firewall rule is opened, nobody can say who did it or when.
 = What they are | SOLUTION
-**CloudWatch**: metrics, logs, alarms. **CloudTrail**: a record of API calls: who, what, when, from where.
-= How it works
-An **alarm** watches a metric and notifies or scales. CloudTrail sends records to a protected bucket.
+- **CloudWatch** collects **metrics** (CPU, request count, errors), **logs** and **traces**, draws dashboards and raises **alarms**.
+- **CloudTrail** records **API calls** in your account: who did what, when, from where, and whether it was allowed.
+= Logs and metrics with the CLI
+$ aws logs tail /aws/lambda/resize --follow --since 10m
+- logs tail = print a log group's entries
+- --follow = keep printing new ones; --since 10m = start 10 minutes ago
+$ aws cloudwatch get-metric-statistics --namespace AWS/EC2 --metric-name CPUUtilization --dimensions Name=InstanceId,Value=i-0abc --start-time 2026-11-26T00:00:00Z --end-time 2026-11-26T06:00:00Z --period 300 --statistics Average
+- --namespace / --metric-name = which metric
+- --dimensions = for which instance
+- --period 300 = one value per 5 minutes; --statistics Average = averaged
+= An alarm
+$ aws cloudwatch put-metric-alarm --alarm-name api-5xx --namespace AWS/ApplicationELB --metric-name HTTPCode_Target_5XX_Count --dimensions Name=LoadBalancer,Value=app/shop/abc --statistic Sum --period 60 --evaluation-periods 5 --threshold 20 --comparison-operator GreaterThanThreshold --alarm-actions arn:aws:sns:ap-south-1:111122223333:oncall
+- --statistic Sum --period 60 = count errors per minute
+- --evaluation-periods 5 --threshold 20 = alarm when there are more than 20 per minute, five minutes in a row
+- --alarm-actions = publish to this SNS topic, which pages the on-call person
+= Who did it: CloudTrail
+$ aws cloudtrail lookup-events --lookup-attributes AttributeKey=EventName,AttributeValue=TerminateInstances --max-results 5
+- lookup-events = search the last 90 days of management events
+- AttributeKey=EventName,AttributeValue=TerminateInstances = only server deletions
+The answer shows the user or role, time, source IP and the request. Send trails to a separate, locked S3 bucket so nobody can erase their tracks.
 = Real-time example | PRACTICE
-Error rate above 2% for five minutes: the on-call person is paged. A deleted server: CloudTrail shows the user and time.
+The error rate goes above 2% for five minutes: the on-call engineer is paged before customers notice. Later, a server disappears; CloudTrail shows it was terminated by a CI role at 14:02 because of a wrong script.
 ? "Who deleted it?" is answered by... | CloudWatch | *CloudTrail | Route 53
+^ https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/WhatIsCloudWatch.html CloudWatch User Guide
 
 # c-cfn | CloudFormation and CDK | Intermediate | Build everything from a file.
 @@ user Engineer ; doc Template ; cloud AWS resources ; gear Stack
 = Without it | PROBLEM
 " a Which settings did test have?
-Forty clicks for production, slightly different from the forty for test.
+Forty clicks build production; forty slightly different clicks built test. Nobody can repeat or review them.
 = What it is | SOLUTION
-**CloudFormation** reads a template and creates a **stack** of resources. **CDK** writes templates from code such as TypeScript or Python.
-= How it works
-A **change set** shows what will change. If creation fails, it rolls back. Deleting the stack removes its resources.
+- **CloudFormation** reads a **template** (YAML or JSON) and creates a **stack**: all the resources in it, in the right order. Change the template, update the stack; delete the stack, and its resources are deleted.
+- **CDK** (Cloud Development Kit) lets you write the infrastructure in TypeScript, Python, Java or Go; it generates CloudFormation templates.
+= A small template
+> Resources:
+>   DocsBucket:
+>     Type: AWS::S3::Bucket
+>     Properties:
+>       VersioningConfiguration:
+>         Status: Enabled
+> Outputs:
+>   BucketName:
+>     Value: !Ref DocsBucket
+- Resources = what to create; `DocsBucket` is a logical name you choose
+- Type: AWS::S3::Bucket = the kind of resource
+- Properties = its settings
+- !Ref DocsBucket = a function: the bucket's real name, filled in after creation
+= Deploy it
+$ aws cloudformation deploy --template-file bucket.yaml --stack-name docs --parameter-overrides Env=prod
+- deploy = create the stack, or update it with a **change set**
+- --stack-name docs = the stack's name
+- --parameter-overrides = values for the template's Parameters
+$ aws cloudformation create-change-set --stack-name docs --change-set-name v2 --template-body file://bucket.yaml
+- create-change-set = prepare an update and show what would be added, modified or replaced, without doing it
+If creating a stack fails halfway, CloudFormation **rolls back** to the last good state.
 = Real-time example | PRACTICE
-A training company makes a full copy of its lab for each course on Monday and deletes it on Friday.
+A training company deploys a complete lab environment (VPC, servers, database) for each course on Monday from one template, and deletes the stacks on Friday. Every course gets an identical lab and nothing is left running over the weekend.
 ? What shows changes before applying? | A bucket | *A change set | A role
+^ https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html CloudFormation User Guide
 
 # c-code | CodeCommit, CodeBuild, CodeDeploy, CodePipeline | Intermediate | AWS's own delivery tools.
 @@ user Developer ; gear CodePipeline ; server Servers ; cube CodeBuild
 = Without them | PROBLEM
-Building and copying by hand at night. Steps are forgotten.
+Building and copying releases by hand at night. Steps are forgotten, and nobody can say exactly what was deployed.
 = What they are | SOLUTION
-**CodeCommit** Git hosting, **CodeBuild** builds and tests, **CodeDeploy** releases, **CodePipeline** joins the steps.
-= How it works
-A push starts the pipeline: build, test, approve, deploy. CodeDeploy can go blue-green and roll back on an alarm.
+| Service | Job |
+| CodeCommit | Git hosting inside AWS (paused for new customers in 2024, then returned to general availability) |
+| CodeBuild | Builds and tests in short-lived containers, described in `buildspec.yml` |
+| CodeDeploy | Releases to EC2, ECS or Lambda: rolling or blue-green, with automatic rollback |
+| CodePipeline | Joins the stages: source, build, test, approval, deploy |
+The source can be GitHub, GitLab or Bitbucket through a CodeConnections link.
+= A buildspec
+> version: 0.2
+> phases:
+>   install:
+>     runtime-versions: { nodejs: 22 }
+>   build:
+>     commands:
+>       - npm ci
+>       - npm test
+>       - docker build -t $REPO:$CODEBUILD_RESOLVED_SOURCE_VERSION .
+> artifacts:
+>   files: [appspec.yml, taskdef.json]
+- phases = install, pre_build, build, post_build, run in order
+- commands = shell commands; a failure stops the build
+- $CODEBUILD_RESOLVED_SOURCE_VERSION = the commit ID, used as the image tag
+- artifacts = files passed to the next stage
+$ aws codepipeline start-pipeline-execution --name shop
+- start-pipeline-execution = run the pipeline now, without a push
 = Real-time example | PRACTICE
-A bank that must keep everything in its AWS account uses these; a start-up on GitHub uses Actions with OIDC instead.
+A bank that must keep everything inside its own AWS accounts uses CodeBuild and CodePipeline, with CodeDeploy doing blue-green releases that roll back automatically if a CloudWatch alarm fires. A start-up already on GitHub uses GitHub Actions with OIDC instead.
 ? Which joins the steps? | CodeBuild | *CodePipeline | CodeCommit
+^ https://docs.aws.amazon.com/codepipeline/latest/userguide/welcome.html CodePipeline User Guide
 
 # c-cost | Billing, Budgets and Organizations | Beginner | Paying only for what you meant to.
 @@ user Finance ; board Budgets ; cloud Accounts ; flag Alert
 = Without it | PROBLEM
 " a Who spent 4,000 last month?
-A forgotten test server and a large data transfer appear on the bill a month later.
+A forgotten test server, an unused load balancer and a large data transfer appear on the bill a month later, when the money is already spent.
 = What it is | SOLUTION
-**Budgets** warn you, **Cost Explorer** shows where money goes, **Organizations** groups accounts with one bill and shared rules.
-= How it works
-Tag resources with team and project. Set an alert at 50%, 80% and 100% of the plan.
+- **Budgets** send an alert when actual or forecast spend crosses a limit.
+- **Cost Explorer** shows where money goes, by service, account, region or tag.
+- **Organizations** groups many accounts under one bill, with shared rules (**SCPs**, service control policies) that limit what any account may do.
+- **Cost allocation tags** (such as `Team=payments`) let you split the bill by team or project.
+= Create a budget
+$ aws budgets create-budget --account-id 111122223333 --budget '{"BudgetName":"monthly","BudgetLimit":{"Amount":"100","Unit":"USD"},"TimeUnit":"MONTHLY","BudgetType":"COST"}' --notifications-with-subscribers '[{"Notification":{"NotificationType":"FORECASTED","ComparisonOperator":"GREATER_THAN","Threshold":80},"Subscribers":[{"SubscriptionType":"EMAIL","Address":"team@example.com"}]}]'
+- BudgetLimit 100 USD, MONTHLY = the plan for each month
+- NotificationType FORECASTED, Threshold 80 = warn when the **forecast** passes 80%, before it happens
+- Subscribers = who gets the email
+= Look at spending
+$ aws ce get-cost-and-usage --time-period Start=2026-11-01,End=2026-11-26 --granularity MONTHLY --metrics UnblendedCost --group-by Type=DIMENSION,Key=SERVICE
+- ce = Cost Explorer
+- --group-by … SERVICE = one line per service, to see what costs most
+Common surprises: NAT gateway data, idle load balancers, unattached EBS volumes, old snapshots, and data leaving AWS.
 = Real-time example | PRACTICE
-A company gives each team its own account: test, staging, production. A mistake in test cannot touch production, and costs are clear.
+A company gives each team separate accounts for test, staging and production inside one Organization. An SCP forbids anyone from disabling CloudTrail. A mistake in a test account cannot touch production, and each team sees its own costs.
 ? First thing to set on a new account? | A large server | *MFA and a budget alert | A public bucket
+^ https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html AWS Budgets

@@ -21,7 +21,7 @@ for (const s of subjects) for (const c of s.chapters) for (const l of c.lessons)
     st.add.forEach(a => vis.add(a)); st.del.forEach(a => vis.delete(a));
     for (const a of st.acts) if (a.k === 'say') assert(n.has(a.id) && vis.has(a.id) && a.t.length <= 90, `${at} "${st.t}" say ${a.id}`); else if (a.k === 'walk') assert(PEOPLE.has(l.nodes.find(x => x.id === a.a)?.shape), `${at} "${st.t}" only people walk: ${a.a}`);
     for (const f of st.flow) for (const r of [f.a, f.b]) { assert(n.has(r), `${at} "${st.t}" flow ${r}`); assert(vis.has(r), `${at} "${st.t}" flow to hidden ${r}`); }
-    if (!st.body.some(b => b.k === 'p' || b.k === 'row')) bad.push(`${at} "${st.t}" no text`);
+    if (!st.body.some(b => b.k === 'p' || b.k === 'row' || b.k === 'li' || b.k === 'part')) bad.push(`${at} "${st.t}" no text`);
   }
 }
 for (const g of commands) { const n = new Set(g.nodes.map(x => x.id)); for (const x of g.nodes) assert(SHAPES[x.shape], g.id + x.shape); for (const c of g.list) for (const f of c.flow) assert(n.has(f.a) && n.has(f.b), `${g.id}: ${c.cmd}`); }

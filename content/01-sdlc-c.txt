@@ -42,19 +42,31 @@ These numbers are rules of thumb. Companies draw the lines differently.
 " c Here is everything I want.
 w c>ba all needs
 w ba>d signed document
-Requirements, design, build, test, deploy, maintain. Each phase finishes, is documented and approved, then hands over to the next person.
+The **Waterfall model** runs the phases of the SDLC once, strictly in order, like water falling down steps: it never flows back up. Each phase must be **finished, documented and signed off** before the next one starts.
+| Phase | Who | What comes out |
+| 1 Requirements | Client, business analyst | Software Requirements Specification (SRS), signed |
+| 2 Design | Architect, designer | High-level and detailed design documents |
+| 3 Implementation | Developers | The code for the whole system |
+| 4 Testing | Testers | Test reports, defects fixed |
+| 5 Deployment | Operations | The system installed for users |
+| 6 Maintenance | Support and developers | Fixes and small changes |
+The signed document from one phase is the input of the next. That is the **handover** you see in the scene.
 = The long middle
 + dev qa
 w d>dev spec
 " dev Coding, months 4 to 9.
 w dev>qa whole system
-All the code exists before testing starts. The client sees nothing until the end.
+Developers build the **whole** system from the design documents, which can take many months. Only when all the code exists does testing begin.
+- The client usually sees **nothing working** during this long middle; progress is reported as "percentage done" in a plan.
+- Testers receive everything at once, so bugs pile up near the deadline, and testing time is often squeezed.
+- Questions that come up during coding go back to the signed documents, not to a conversation with users.
 = Where it breaks | PROBLEM
 w qa>c month 12
 " c This is not what I meant.
 : c err first look
 w !c>ba start again
-A misunderstanding from month 1 is found in month 12. Going back means repeating every phase.
+The client sees the product for the first time in month 12, and it is not what they meant. A sentence in the requirements was understood differently by the analyst and the client. That misunderstanding from month 1 is found in month 12.
+Going back means changing the requirements, then the design, then the code, then testing again: almost the whole project repeated. Studies of software projects have long shown that a defect found late costs many times more to fix than one found during requirements.
 !! The cost of a mistake grows with the distance between making it and noticing it.
 = Scale and fit | SCALE
 : ba ok stable scope
@@ -90,11 +102,20 @@ Winston Royce's 1970 paper, often cited as its origin, itself advised iterating.
 = Down the left side
 + r a m c
 ~ r>a ;; a>m ;; m>c
-It keeps Waterfall's order but asks at each level: **how will we test this?**
+The **V-Model** (verification and validation model) keeps Waterfall's order, but bends the line into a V. The left side goes **down** through more and more detailed design:
+| Level (left side) | Describes | Written by |
+| Requirements | What the users need | Analyst with the client |
+| Architecture / system design | The main parts and how they connect | Architect |
+| Module design | Each part in detail: functions, data | Senior developers |
+At every level the team also asks: **how will we test this?** and writes that test plan immediately.
 = Up the right side
 + ut it at
 ~ c>ut ;; ut>it ;; it>at
-Testing climbs back up: unit, integration, acceptance.
+After coding at the bottom, testing climbs back **up** the right side, each level checking the design level opposite it:
+- **Unit tests** check each module against its module design.
+- **Integration tests** check that modules work together as the architecture says.
+- **System tests** check the whole system.
+- **Acceptance tests** check, with the client, that the requirements are met.
 = The pairs
 ~ r>at verifies ;; a>it verifies ;; m>ut verifies
 Tests are planned on the way **down**, so vague requirements are noticed early.
@@ -126,13 +147,15 @@ Working software still appears late, and a change touches both sides of the V. T
 " d Here is a simple whole.
 w d>v1 build
 ~ v1>c try
-Start with a basic version of the **whole** product: plain screens, few rules, but it works from end to end.
+The **Iterative model** does not try to get everything right at once. It starts with a basic version of the **whole** product: plain screens, few rules, simple algorithms, but it works from start to finish.
+Each **iteration** (round) is a small SDLC of its own: plan, design, build, test, review. The product is improved round after round, based on what was learned from the last version.
 = Learn and refine
 + v2
 " c Search must find misspelled names.
 w c>d feedback
 w d>v2 improve
-Each round plans, designs, builds and tests a better version.
+The client and users try version 1 and give feedback: what is missing, what is confusing, what is too slow. The team plans the next round around the most important feedback, designs the change, builds it, tests it and shows version 2.
+Because the whole product exists early, problems in the overall design are found in the first weeks, not at the end. The design must allow parts to be reworked, since early versions are deliberately simple.
 = Closer each time
 + v3
 w d>v3 improve
@@ -160,7 +183,10 @@ A search engine for a library of five million books. Twelve people, ten months. 
 + c d a
 w d>a increment 1
 ~ a>c in use
-Each increment is a complete, usable part. Users start before the whole product exists.
+The **Incremental model** splits the product into **increments**: slices that are each designed, built, tested and **released** completely, one after another.
+- The overall requirements and architecture are planned at the start, so the slices fit together.
+- Each increment is finished and usable on its own, not a rough draft.
+- Users start using the first slice while later ones are being built.
 = Add the next slice
 + b
 w d>b increment 2
@@ -198,7 +224,12 @@ w d>p sketch
 ~ p>c click
 " c No, bigger buttons, fewer steps.
 w d>p change
-A quick model of the screens. Throw it away or change it until the client nods.
+The **Prototype model** builds a quick, cheap model of the product, often just screens with no real logic behind them, and puts it in front of the client and users.
+1. Gather rough requirements.
+2. Build a prototype in days: paper sketches, a clickable Figma design, or a simple app.
+3. Users try it and react: "no, bigger buttons, fewer steps".
+4. Change the prototype and repeat until the client agrees.
+Reacting to something real is much easier than describing a wish in words.
 = Then build properly
 + r dev
 ~ p>r agreed ;; r>dev build
@@ -225,7 +256,13 @@ A tablet app for nurses. Five people, three months. Paper sketches on Monday, a 
 = One turn
 + g r b p
 ~ g>r ;; r>b ;; b>p ;; p>g
-Four steps per round: set goals, find and reduce risk, build and test, review and plan the next round.
+The **Spiral model**, described by Barry Boehm in 1986, repeats a loop. Each turn of the spiral has four quadrants:
+| Quadrant | Activity |
+| 1 Determine objectives | What should this round achieve, and what are the alternatives? |
+| 2 Identify and resolve risks | What could make the project fail? Reduce it: prototypes, simulations, expert reviews |
+| 3 Develop and test | Build and test the next level of the product |
+| 4 Plan the next iteration | Review with the client and decide whether, and how, to continue |
+The distance from the centre shows money spent so far; each turn costs more than the last.
 = Risk decides
 * r
 " p Can it handle a million calls?
@@ -257,7 +294,12 @@ A new air traffic control system. Two hundred people, six years. Round 1 proves 
 " u This field comes first.
 w u>t1 workshop
 w u>t2 workshop
-Short workshops with users, parallel small teams, strong tools, and fixed time boxes of about 60 to 90 days.
+**RAD** (Rapid Application Development), described by James Martin in 1991, puts speed first:
+- **Requirements planning**: short workshops where users and developers agree on scope.
+- **User design**: users and developers build and refine screens together, in repeated workshops (JAD: joint application design).
+- **Construction**: small teams build parts in parallel with strong tools, reusing ready components.
+- **Cutover**: testing, data conversion and switching to the new system.
+The whole project is usually time-boxed to about 60 to 90 days.
 = Build in parallel
 + tool
 ~ t1>tool ;; t2>tool

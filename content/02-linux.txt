@@ -10,23 +10,38 @@
 = You type, something runs
 + you sh
 ~ you>sh command
-The **shell** (often Bash) reads your command, finds the program and starts it.
+When you type `ls` and press Enter, the **shell** (usually Bash) reads the line, splits it into the program name and its options, finds the program in the folders listed in `PATH`, and starts it. When the program ends, the shell shows the prompt again.
+The shell is just a program too. You can swap it (zsh, fish) without changing the rest of the system.
 = The kernel
 + k hw
 ~ sh>k system call ;; k>hw control
-Programs may not touch hardware. They ask the **kernel** through system calls: open a file, send a packet, start a process.
+The **kernel** is the core of Linux. It is the only part allowed to touch the hardware directly: CPU, memory, disks, network cards.
+Ordinary programs must ask it through **system calls**: "open this file", "send these bytes", "start a process", "give me memory". The kernel checks permissions, then does the work.
+This separation is why one crashing program does not crash the whole machine, and why one user cannot read another user's files.
 = Distributions
 + pkg
 * pkg
-A distribution is the kernel plus tools plus a package manager. **Ubuntu** and **Debian** use `apt`. **RHEL** and **Fedora** use `dnf`. **Alpine** uses `apk` and is common in containers. **Kali** is Debian-based and ships security testing tools.
-= Everything has a place
-`/etc` configuration, `/var/log` logs, `/home` users, `/usr/bin` programs, `/tmp` temporary files, `/proc` live kernel information.
-$ ls -l /etc/os-release
+A **distribution** ("distro") is the Linux kernel plus tools, a package manager, default settings and support.
+| Distribution | Package tool | Typical use |
+| Ubuntu, Debian | `apt` | Servers, desktops, cloud |
+| RHEL, Rocky, Fedora | `dnf` | Enterprise servers |
+| Alpine | `apk` | Tiny container images |
+| Kali | `apt` | Security testing (Debian-based) |
+= Which system am I on?
+$ cat /etc/os-release
+- cat = print a file
+- /etc/os-release = a standard file naming the distribution and version
+> NAME="Ubuntu"
+> VERSION="24.04 LTS (Noble Numbat)"
 $ uname -r
+- uname = print system information
+- -r = the kernel release (version)
+> 6.8.0-45-generic
 = Why DevOps needs it
 ~ you>sh ;; sh>k
-Most servers, containers and CI runners use Linux. When a deployment fails, you will be reading its logs in a shell.
+Most servers, almost all containers and most CI runners are Linux. When a deployment fails, you will read its logs in a shell, check its processes and its disk, and fix its configuration files. Every later subject here (Docker, Kubernetes, Ansible, Jenkins) assumes you can do that.
 ? Who may control hardware directly? | The shell | *The kernel | Any package
+^ https://www.kernel.org/doc/html/latest/admin-guide/README.html Linux kernel documentation
 
 # linux-perm | Users and permissions | Beginner | Who may read, write and run each file.
 @ u user 0 0 Owner
@@ -35,29 +50,61 @@ Most servers, containers and CI runners use Linux. When a deployment fails, you 
 @ f doc 2 1 deploy.sh
 = Three audiences
 ~ u>f ;; g>f ;; o>f
-Each file has an owner and a group. Everyone else is "others". Each audience gets read, write and execute separately.
+Linux is multi-user: many people and services share one machine. Every file has:
+- an **owner** (one user);
+- a **group** (a set of users, such as `ops`);
+- and everyone else, called **others**.
+Each of these three gets its own permissions: **r**ead, **w**rite and e**x**ecute (run).
 $ ls -l deploy.sh
-> -rwxr-x--- 1 ana ops 812 deploy.sh
-= Read the string
+- ls -l = long listing, which includes permissions, owner and group
+> -rwxr-x--- 1 ana ops 812 Nov 26 10:02 deploy.sh
+= Read the permission string
 * u f
 : u ok rwx
 : g info r-x
 : o off ---
-`rwx` owner, `r-x` group, `---` others. On a directory, `x` means "may enter".
-= As numbers
-Read 4, write 2, execute 1. Add them: `rwx` = 7, `r-x` = 5, nothing = 0. So this file is 750.
+Split `-rwxr-x---` into four parts:
+- - = the first character is the type: `-` file, `d` directory, `l` link
+- rwx = owner (ana): read, write, execute
+- r-x = group (ops): read and execute, no write
+- --- = others: nothing
+On a **directory**, `r` lets you list it, `w` lets you create and delete files in it, and `x` lets you enter it.
+= Change permissions
+Each permission has a number: read 4, write 2, execute 1. Add them per audience: `rwx` = 7, `r-x` = 5, `r--` = 4, `---` = 0.
 $ chmod 750 deploy.sh
+- chmod = "change mode": change permissions
+- 750 = owner 7 (rwx), group 5 (r-x), others 0 (---)
+$ chmod u+x deploy.sh
+- u+x = the letter form: give the **u**ser (owner) execute. `g` group, `o` others, `a` all; `+` adds, `-` removes
 $ chown ana:ops deploy.sh
+- chown = "change owner"
+- ana:ops = new owner, a colon, new group
+= Users and groups
+$ id
+- id = show your user, your groups and their numbers
+$ sudo useradd -m -s /bin/bash deploy
+- useradd = create a user
+- -m = also create its home folder
+- -s /bin/bash = its login shell
+$ sudo usermod -aG docker ana
+- usermod = change a user
+- -aG docker = **a**dd to the supplementary **G**roup docker. Without `-a`, all other groups are removed
 = The 777 trap | RISK
 * o
 : o err rwx
 ~ !o>f anyone edits
-`chmod 777` lets every account change the script that your server later runs.
-!! Never fix "permission denied" with 777. Find which user needs access and grant only that.
-= sudo
+"Permission denied" is annoying, and `chmod 777` makes it go away. It also lets **every** account on the machine change this script, including a hacked web server account. The next time root runs the script, it runs the attacker's code.
+!! Never fix "permission denied" with 777. Find out which user needs access, then grant exactly that, usually with `chown` or a group.
+= sudo and root
 * u
-`sudo` runs one command as root and records it. Work as a normal user and use sudo only when needed.
+**root** is the administrator account that may do anything. Working as root all the time means one typo can destroy the system.
+$ sudo systemctl restart nginx
+- sudo = run this one command as root, after asking your password. It is logged in `/var/log/auth.log`
+$ sudo -i
+- -i = open a full root shell. Use rarely, and exit when done
+Who may use sudo is set in `/etc/sudoers`; edit it only with `visudo`, which checks for mistakes.
 ? chmod 640 gives the group... | write | *read | nothing
+^ https://www.redhat.com/en/blog/linux-file-permissions-explained Red Hat: Linux file permissions
 
 # linux-proc | Processes, services and logs | Beginner | What is running, and how systemd keeps it running.
 @ sys gear 0 0 systemd
@@ -68,33 +115,71 @@ $ chown ana:ops deploy.sh
 = A process
 + web app sys
 ~ sys>web starts ;; sys>app starts
-A process is a running program with a number (PID). On most distributions **systemd** is PID 1 and starts the rest.
+A **process** is a running program. Each has a number, the **PID**, an owner, and memory and CPU it uses. On most distributions **systemd** is the first process (PID 1); it starts the others at boot.
 $ ps aux
+- ps = list processes
+- a = of all users; u = show user, CPU and memory; x = include those without a terminal (services)
+$ ps aux | grep nginx
+- | grep nginx = keep only lines mentioning nginx
 $ top
-= Signals
+- top = live view, sorted by CPU. `q` quits. `htop` is a friendlier version if installed
+= Signals: asking a process to stop
 + you
 ~ you>app TERM
-`kill` sends a signal. **TERM** asks it to finish cleanly. **KILL** stops it at once with no cleanup.
-!! Try TERM first. KILL can leave half-written files.
-= Services
+$ kill 4321
+- kill = send a signal to a process (despite the name, not always to kill it)
+- 4321 = the PID
+- (no signal given) = TERM, which asks the program to save its work and exit cleanly
+$ kill -9 4321
+- -9 = KILL: the kernel stops the process at once. The program cannot clean up
+$ pkill -f "node server.js"
+- pkill -f = send the signal to processes whose full command line matches
+!! Always try TERM first and wait a few seconds. KILL can leave half-written files and locked resources.
+= Services with systemd
 * sys
+A **service** is a program meant to run in the background all the time, like a web server. systemd starts, stops and watches services.
 $ sudo systemctl status nginx
+- systemctl = the tool to control systemd
+- status = is it running, since when, its PID and its last log lines
+- nginx = the service name (the full name is `nginx.service`)
 $ sudo systemctl restart nginx
+- restart = stop, then start. `reload` re-reads settings without stopping, if the program supports it
 $ sudo systemctl enable --now nginx
-`start` is for now. `enable` is for every boot.
+- enable = start automatically at every boot
+- --now = and also start it right now
+| Command | Effect now | Effect after reboot |
+| `start` | Running | Not started |
+| `enable` | Nothing | Started |
+| `enable --now` | Running | Started |
 = It crashed | PROBLEM
 : app err exited
 ~ app>log last words
 + log
-With `Restart=on-failure` in its unit file, systemd starts it again. Then read why it died.
+The app exits at 03:00 with an error. If nothing restarts it, the site stays down until someone wakes up. A **unit file** tells systemd how to run a service, including what to do when it dies:
+> [Service]
+> ExecStart=/usr/bin/node /opt/app/server.js
+> Restart=on-failure
+> User=app
+- ExecStart = the command that starts the program
+- Restart=on-failure = start it again if it exits with an error
+- User=app = run as the unprivileged user `app`, not root
+Restarting buys time; you still need to find out **why** it died.
 = Read the journal
-The journal collects output from every service. `-u` picks one service, `-f` follows it live, `-p err` shows errors only.
 * log
 ~ log>you
+The **journal** collects the output of every service in one place.
 $ journalctl -u app -n 50 --no-pager
+- journalctl = read the journal
+- -u app = only the unit (service) `app`
+- -n 50 = the last 50 lines
+- --no-pager = print directly instead of opening `less`
 $ journalctl -u app -f
+- -f = follow: keep printing new lines live
 $ journalctl -p err --since "1 hour ago"
+- -p err = only messages of priority "error" or worse
+- --since "1 hour ago" = only recent messages
 ? Which command makes a service start at boot? | systemctl start | *systemctl enable | systemctl status
+^ https://systemd.io/ systemd documentation
 
 # shell-script | Shell scripting | Beginner | From one command to a safe script.
 @ a doc 0 0 access.log
@@ -102,29 +187,70 @@ $ journalctl -p err --since "1 hour ago"
 @ s gear 2 0 sort
 @ u gear 3 0 uniq
 @ o laptop 4 0 Result
-= Pipes
+= Pipes: join small tools
 ~ a>g lines ;; g>s errors ;; s>u sorted ;; u>o counts
-Small programs, joined. Each `|` sends one program's output to the next one's input.
-$ grep " 500 " access.log | sort | uniq -c
-= Redirection
+Linux tools each do one small job well. A **pipe** `|` sends the output of one command straight into the next.
+$ grep " 500 " access.log | awk '{print $7}' | sort | uniq -c | sort -rn | head
+- grep " 500 " access.log = keep lines with status 500
+- awk '{print $7}' = print the 7th word of each line: the requested path
+- sort = put identical paths next to each other
+- uniq -c = merge identical lines and count them
+- sort -rn = sort by that count, **r**everse (largest first), **n**umerically
+- head = keep the first 10
+In one line: the ten pages that fail most often.
+= Redirection: send output to files
 * o
-`>` replaces a file, `>>` appends, `2>` catches errors.
+$ ./build.sh > build.log
+- > build.log = write normal output to the file, **replacing** what was there
+$ ./build.sh >> build.log
+- >> = **append** to the file instead
 $ ./build.sh > build.log 2>&1
-= Variables and quoting
+- 2>&1 = send errors (stream 2) to the same place as normal output (stream 1)
+$ ./build.sh 2> /dev/null
+- /dev/null = a special file that throws everything away
+= Your first script
+A script is a text file of commands. Save this as `backup.sh`:
+> #!/usr/bin/env bash
+> set -euo pipefail
+> src="/var/www"
+> dest="/backup/www-$(date +%F).tar.gz"
+> tar -czf "$dest" "$src"
+> echo "Saved $dest"
+- #!/usr/bin/env bash = the "shebang": run this file with Bash
+- src="/var/www" = a variable; no spaces around `=`
+- $(date +%F) = run a command and insert its output, here today's date
+- tar -czf = **c**reate a g**z**ipped archive in the **f**ile that follows
+- "$dest" = use the variable's value; always in double quotes
+$ chmod +x backup.sh
+$ ./backup.sh
+- ./ = run the file from the current folder (it is not in PATH)
+= Quotes and conditions
 $ name="my file.txt"
 $ cp "$name" /backup/
-Quote variables. Without quotes a space splits one filename into two.
+Without quotes, Bash splits `my file.txt` into two words, and `cp` looks for two files named `my` and `file.txt`.
+> if [ -f "$dest" ]; then
+>   echo "Backup exists"
+> fi
+- [ -f "$dest" ] = test: is this an existing regular file? (`-d` directory, `-z` empty text)
+- then … fi = what to do if the test is true; `fi` closes the `if`
 = Exit codes
-Every command returns a number: 0 means success, anything else is failure. CI systems decide red or green from this.
+Every command returns a number when it ends: **0 means success**, anything else means failure. `$?` holds the last one.
 $ npm test && ./deploy.sh
+- && = run the second command **only if** the first succeeded
+$ ./deploy.sh || echo "Deploy failed"
+- || = run the second only if the first **failed**
+CI systems such as Jenkins and GitHub Actions decide green or red purely from exit codes.
 = Safe by default | PRACTICE
 * g
 : g ok stops on error
-$ #!/usr/bin/env bash
-$ set -euo pipefail
-`-e` stop on error, `-u` stop on an unset variable, `pipefail` notice a failure anywhere in a pipe.
-!! `rm -rf "$DIR/"` with an empty DIR means the root directory. `set -u` and `${DIR:?}` protect you.
+By default Bash carries on after an error, which can turn a small failure into a disaster. Start every script with:
+> set -euo pipefail
+- -e = stop at the first command that fails
+- -u = stop if a variable is used that was never set (catches typos)
+- -o pipefail = a pipe fails if **any** part fails, not only the last
+!! `rm -rf "$DIR/"` with an empty `DIR` becomes `rm -rf /`. `set -u` and `"${DIR:?}"` (stop if empty) protect you.
 ? What does exit code 0 mean? | Failure | *Success | Not started
+^ https://www.gnu.org/software/bash/manual/bash.html Bash reference manual
 
 ## Networking
 # net-basics | IP, ports and DNS | Beginner | How a name becomes a connection.
@@ -132,32 +258,61 @@ $ set -euo pipefail
 @ r router 1 1 Router
 @ dns db 2 0 DNS resolver
 @ w server 3 1 Web server
-= Addresses
+= IP addresses
 + c r w
 ~ c>r ;; r>w
-Each machine has an IP address. `10.x`, `172.16-31.x` and `192.168.x` are private and not routed on the internet.
-`10.0.1.0/24` means the first 24 bits are fixed: 256 addresses.
-= Names
+Every machine on a network has an **IP address**, like a postal address. IPv4 looks like `192.168.1.20`; IPv6 like `2001:db8::1`.
+Some ranges are **private**: used inside homes and companies, never routed on the internet. `10.0.0.0/8`, `172.16.0.0/12` and `192.168.0.0/16`.
+The **/24** after an address (CIDR notation) says how many leading bits are the network part. `10.0.1.0/24` fixes the first 24 bits, leaving 8 bits: 256 addresses, `10.0.1.0` to `10.0.1.255`.
+$ ip addr
+- ip addr = show this machine's network interfaces and their addresses
+$ ip route
+- ip route = show the routes; the "default via" line is the router that leads to the internet
+= Names with DNS
 + dns
 ~ c>dns shop.example? ;; dns>c 203.0.113.10
-People use names. **DNS** translates: A (IPv4), AAAA (IPv6), CNAME (alias), MX (mail), TXT (text). The TTL says how long to cache an answer.
+People use names; computers need addresses. **DNS** translates. Before connecting to `shop.example`, your laptop asks a resolver for its address.
 $ dig +short shop.example
-= Ports
+- dig = query DNS
+- +short = print only the answer
+> 203.0.113.10
+= Ports: which program
 ~ c>w :443
 * w
-A port picks the program on that machine: 22 SSH, 53 DNS, 80 HTTP, 443 HTTPS, 5432 PostgreSQL, 6443 Kubernetes API.
-$ ss -tlnp
-= Firewall
+An address finds the machine; a **port** finds the program on it. A server can run SSH, a website and a database at once, each listening on its own port.
+| Port | Service |
+| 22 | SSH |
+| 53 | DNS |
+| 80 / 443 | HTTP / HTTPS |
+| 5432 / 3306 | PostgreSQL / MySQL |
+| 6443 | Kubernetes API |
+$ sudo ss -tlnp
+- -t = TCP; -l = only listening sockets; -n = numbers; -p = show the program
+> LISTEN 0 511 0.0.0.0:443 users:(("nginx",pid=812))
+`0.0.0.0` means "listening on all addresses"; `127.0.0.1` would mean "only from this machine".
+= Firewall: timed out or refused
 : r warn 443 only
 ~ !c>w :5432
-A firewall allows or drops traffic by address and port. "Connection timed out" often means dropped. "Connection refused" means you reached the machine but nothing listens there.
+A firewall decides which addresses and ports may pass. The error message tells you a lot:
+| Message | Usually means |
+| Connection timed out | A firewall silently dropped the packets, or the host is down |
+| Connection refused | You reached the machine, but nothing listens on that port |
+| Name or service not known | DNS could not find the name |
 = Debug in order | PRACTICE
-Name, then route, then port, then application.
+Check one layer at a time: name, then route, then port, then application.
 $ dig shop.example
+- dig = does the name resolve, and to the right address?
 $ ping -c 3 203.0.113.10
+- ping = does the machine answer?
+- -c 3 = send only three packets (it never stops otherwise on Linux)
 $ nc -vz 203.0.113.10 443
+- nc = netcat, a network Swiss army knife
+- -v = verbose; -z = only test if the port is open, send no data
 $ curl -v https://shop.example
+- curl -v = does the application answer, and with what?
+Some networks block ping, so a failed ping alone does not prove the host is down.
 ? "Connection refused" usually means... | DNS failed | *nothing listens on that port | the password is wrong
+^ https://www.cloudflare.com/learning/network-layer/internet-protocol/ Cloudflare: Internet Protocol
 
 # ssh-tls | SSH and HTTPS | Intermediate | Two ways to prove identity and encrypt.
 @ c laptop 0 0 Client
@@ -167,21 +322,35 @@ $ curl -v https://shop.example
 = SSH key pair
 + c k s
 * k
-A private key stays with you. The matching public key goes in `~/.ssh/authorized_keys` on the server.
-$ ssh-keygen -t ed25519
+SSH and HTTPS both use **public-key cryptography**: a key pair where what one half locks, only the other half can unlock, and you cannot work out the private half from the public one.
+For SSH, your **private key** stays on your laptop. The matching **public key** goes into `~/.ssh/authorized_keys` on each server.
+$ ssh-keygen -t ed25519 -C "ana@laptop"
+- -t ed25519 = modern key type
+- -C = a comment to recognise the key
 $ ssh-copy-id ana@server
-= Logging in
+- ssh-copy-id = install your public key on the server
+= Logging in with a key
 ~ c>s hello ;; s>c challenge ;; c>s signature
-The client signs data tied to this session with the private key. The key itself never travels.
+The server sends a random challenge tied to this session. Your client **signs** it with the private key. The server checks the signature with your public key. The private key itself never crosses the network, so there is nothing for an eavesdropper to steal.
 = Know the host
 : s warn new host key
-The first time, SSH shows the server's fingerprint. Check it. If it changes later, stop and find out why.
-= HTTPS
+The first time you connect, SSH shows the server's **fingerprint** and asks you to confirm. It then remembers it in `~/.ssh/known_hosts`.
+> WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!
+If you see this later, the server's key changed. It may be a rebuilt server, or someone pretending to be it. Stop and check before connecting.
+= HTTPS and certificates
 + ca
 ~ ca>s certificate ;; s>c certificate ;; c>s encrypted
-TLS proves the server owns its name using a certificate signed by an authority your browser trusts, then agrees on fresh keys for encryption.
+A website proves its name with a **certificate**: its public key plus the domain name, signed by a **certificate authority** (CA) that browsers trust, such as Let's Encrypt.
+During the TLS handshake the browser checks the signature, the name and the dates, then both sides agree on fresh keys and encrypt everything that follows.
 = Expiry | PRACTICE
 : s err expired
-Certificates expire. Automate renewal with ACME (Let's Encrypt, cert-manager) and alert well before the date.
+Certificates expire, usually after 90 days to a year. An expired certificate blocks every visitor with a full-page warning.
 $ openssl s_client -connect shop.example:443 -servername shop.example
+- openssl s_client = open a TLS connection and print the certificate details
+- -connect shop.example:443 = host and port
+- -servername = the name to ask for; one server can host many sites
+$ echo | openssl s_client -connect shop.example:443 2>/dev/null | openssl x509 -noout -dates
+- openssl x509 -noout -dates = print only the "not before" and "not after" dates
+Automate renewal with ACME tools (certbot, cert-manager) and alert at least two weeks before expiry.
 ? What crosses the network during SSH key login? | The private key | *A signature | The password
+^ https://letsencrypt.org/how-it-works/ Let's Encrypt: how it works

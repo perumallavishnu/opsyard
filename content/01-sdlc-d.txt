@@ -11,34 +11,57 @@
 + cust team
 " cust The market changed. Can we pivot?
 " team The plan says no...
-Requirements change because people learn. Agile bets that **responding to change** is cheaper than predicting everything.
+A food delivery start-up plans a year of work in detail. In month three a competitor launches grocery delivery, and customers start asking for it. The plan, the contract and the budget all assume the old idea. Changing course means renegotiating everything.
+Requirements change because people **learn**: clients see what is possible, markets move, users behave differently than expected. Agile bets that **responding to change** is cheaper than trying to predict everything at the start.
 = The four values
 * cust team
 " team Let us show you something Friday.
-The 2001 Manifesto prefers: **individuals and interactions** over processes and tools; **working software** over comprehensive documentation; **customer collaboration** over contract negotiation; **responding to change** over following a plan.
-! "Over" does not mean "instead of". The right-hand items still have value.
+In 2001, seventeen practitioners wrote the **Manifesto for Agile Software Development**. It prefers:
+| We value more… | …than |
+| Individuals and interactions | Processes and tools |
+| Working software | Comprehensive documentation |
+| Customer collaboration | Contract negotiation |
+| Responding to change | Following a plan |
+! "Over" does not mean "instead of". Plans, documents and tools still have value; the left side simply wins when they conflict.
+= Twelve principles, in short
+The Manifesto adds twelve principles. The most important ideas:
+- satisfy the customer through **early and continuous delivery** of valuable software;
+- welcome changing requirements, even late;
+- deliver working software **frequently**, every few weeks;
+- business people and developers work **together daily**;
+- **working software** is the main measure of progress;
+- keep a sustainable pace; build simple things; reflect regularly and adjust.
 = Someone decides the order
 + po back
 w cust>po wishes
 w po>back most valuable first
-A product owner turns wishes into an ordered backlog.
+Wishes arrive from everywhere: clients, users, sales, support. One person, the **product owner**, collects them in a single ordered list, the **backlog**, with the most valuable items at the top.
+Ordering is a real decision: "card payment before profile pictures, because without payment we earn nothing". The team then always works on what matters most right now.
 = Short loops
 + inc
 ~ back>team pick small
 w team>inc build
 " team Login works. Try it.
-Work in small slices. Every one to four weeks, show something that works.
+The team takes a few items from the top, small enough to finish in one to four weeks, and turns them into **working software** that can be tried, not a document or a half-built feature. Each such result is an **increment**.
 = Feedback steers
 ~ inc>cust try
 " cust Good. Payment before profile.
 w po>back new order
 * cust back po
-What the customer says changes the order. The most valuable work always comes next.
+The client tries the increment and reacts. What they learn changes the backlog: new items appear, others drop. The next loop starts from the new order. A misunderstanding is now found after two weeks, not twelve months.
 = Agile is not a method
 " team Scrum or Kanban? Both can be agile.
-Agile is values and twelve principles. **Scrum, Kanban, XP, Lean and SAFe** are concrete ways to practise them. The next lessons take them one at a time.
+Agile is a set of values and principles, not a process you can install. Concrete frameworks put them into practice:
+| Framework | In one line |
+| Scrum | Fixed-length Sprints, three roles, a Sprint Goal |
+| Kanban | Continuous flow with limits on work in progress |
+| XP | Engineering habits: pairing, test-driven development, continuous integration |
+| Lean | Remove waste and waiting |
+| SAFe, LeSS | Coordinate many agile teams |
+The next lessons take them one at a time.
 ? What does the Manifesto say about documentation? | It is forbidden | *Working software is valued more | It must come first
 ^ https://agilemanifesto.org/ Agile Manifesto
+^ https://agilemanifesto.org/principles.html The twelve principles
 
 # user-stories | Epics, stories and estimates | Beginner | Turning a wish into work a team can finish.
 @ wish user 0 0 User
@@ -51,27 +74,49 @@ Agile is values and twelve principles. **Scrum, Kanban, XP, Lean and SAFe** are 
 " wish I want to save my card.
 + wish s1
 ~ wish>s1 need
-A story states need and reason: "As a **buyer** I want to **save my card** so that **checkout is faster**." It is a reminder to talk, not a full specification.
+A **user story** describes a need from the user's point of view, in a fixed shape:
+> As a buyer, I want to save my card, so that checkout is faster next time.
+- As a buyer = **who** wants it (a real kind of user, not "the system")
+- I want to save my card = **what** they want to do
+- so that checkout is faster = **why**: the value; it helps decide priority and alternatives
+A story is a reminder to have a conversation, not a full specification. Details are added when the team discusses it.
 = Epics are big
 + epic s2 s3
 ~ epic>s1 ;; epic>s2 ;; epic>s3
-"Payments" is too large for one sprint, so it is an **epic**. Split by user value (pay by card, refund, save card), not by layer (database, API, screen).
-= INVEST
+"Payments" is far too large to finish in one Sprint, so it is an **epic**: a big body of work that is split into stories.
+| Split by user value (good) | Split by technical layer (bad) |
+| Pay by card | Build the payments database |
+| Refund an order | Build the payments API |
+| Save a card | Build the payment screens |
+Each good slice can be tested and shown to users on its own. A "database only" story delivers nothing anyone can use.
+= INVEST and acceptance criteria
 * s1
 : s1 ok ready
-Good stories are **I**ndependent, **N**egotiable, **V**aluable, **E**stimable, **S**mall, **T**estable.
-**Acceptance criteria** make them testable: "Given a saved card, when I check out, then I only enter the CVV."
-= Story points
+Good stories follow **INVEST**: **I**ndependent (can be done in any order), **N**egotiable (details open), **V**aluable (to a user or the business), **E**stimable, **S**mall (fits in a Sprint), **T**estable.
+**Acceptance criteria** make a story testable. A common format is Given/When/Then:
+> Given I have a saved card
+> When I check out
+> Then I only need to enter the CVV
+> And the card number shows only its last 4 digits
+- Given = the starting situation
+- When = the action
+- Then / And = the result that must be true
+Testers turn these directly into test cases.
+= Story points and planning poker
 : s1 info 2
 : s2 info 5
 : s3 info 8
-Points compare effort, risk and uncertainty **relative** to other stories. Teams often use 1, 2, 3, 5, 8, 13. In planning poker everyone reveals at once, so the first voice does not anchor the rest.
-!! Never compare velocity between teams. Points mean something different to each one.
-= Subtasks and done
+**Story points** estimate a story's size **relative** to others: effort, complexity and uncertainty together, not hours. Teams often use the Fibonacci-like scale 1, 2, 3, 5, 8, 13; the gaps grow because big items are harder to estimate.
+In **planning poker**, everyone picks a card in secret and all reveal at once, so the first opinion does not anchor the rest. If one person says 2 and another 13, they explain: often one of them knows about a hidden difficulty.
+!! Never compare velocity between teams. A "5" means something different in each team.
+= Subtasks, Ready and Done
 + sub
 ~ s1>sub split
-The team breaks a story into subtasks while planning. A **Definition of Done** (reviewed, tested, deployed to staging) applies to every item.
+During planning, the team breaks a story into **subtasks**: "add card table", "call payment provider's vault", "update checkout screen", "write tests".
+- A **Definition of Ready** (optional) says when a story may enter a Sprint: clear, estimated, acceptance criteria written.
+- A **Definition of Done** applies to every item: code reviewed, tests passing, deployed to staging, documentation updated. "Done" means really done, not "works on my machine".
 ? What makes a story testable? | Story points | *Acceptance criteria | Its epic
+^ https://www.atlassian.com/agile/project-management/user-stories Atlassian: user stories
 
 ## Scrum
 # scrum | Scrum: the framework | Beginner | Three accountabilities, five events, three artifacts.
@@ -86,28 +131,45 @@ The team breaks a story into subtasks while planning. A **Definition of Done** (
 " po I decide what is most valuable.
 " dev We decide how to build it.
 " sm I remove what blocks you.
-A Scrum Team is usually **10 or fewer** people. The **Product Owner** maximises value and orders the backlog. The **Developers** create a usable increment. The **Scrum Master** makes Scrum work.
-= Three artifacts
+**Scrum** is a lightweight framework, described in the official **Scrum Guide** (2020). A **Scrum Team** is small, usually **10 or fewer** people, with no sub-teams or hierarchy, and three accountabilities:
+| Accountability | Responsible for |
+| Product Owner | Maximising the value of the product; owns and orders the Product Backlog; one person, not a committee |
+| Developers | Creating a usable Increment every Sprint; decide **how** to do the work; everyone who builds, including testers and designers |
+| Scrum Master | The team's effectiveness: coaching Scrum, removing impediments, protecting the team; a servant leader, not a manager |
+= Three artifacts and their commitments
 + pb sb inc
 * pb sb inc
-Product Backlog, Sprint Backlog, Increment. Each carries a commitment: **Product Goal**, **Sprint Goal** and **Definition of Done**.
+| Artifact | What it is | Its commitment |
+| Product Backlog | The ordered list of everything the product might need | **Product Goal**: the long-term objective |
+| Sprint Backlog | The items chosen for this Sprint, plus the plan to deliver them | **Sprint Goal**: the single objective of this Sprint |
+| Increment | Everything finished so far, usable and meeting the Definition of Done | **Definition of Done**: the quality bar |
+The commitments give each artifact a purpose and make progress measurable.
 = Work flows through
 w po>pb orders
 ~ pb>sb selected
 w dev>sb pull
 ~ sb>inc done
-The Product Owner orders. The Developers pull what they believe they can finish and turn it into an Increment.
+The Product Owner keeps the Product Backlog ordered and refined. At Sprint Planning the Developers **pull** the items they believe they can finish into the Sprint Backlog; nobody pushes work onto them. During the Sprint they turn those items into a done Increment.
 = Five events
 " sm Fifteen minutes, then back to work.
 " dev Blocked: no test database.
 w sm>dev fixed
-The **Sprint** contains the other four. Maximums for a one-month Sprint: **Planning** 8 hours, **Daily Scrum** 15 minutes, **Review** 4 hours, **Retrospective** 3 hours. Shorter sprints usually need less.
+| Event | Purpose | Time box (for a one-month Sprint) |
+| Sprint | The container for all other events; one month or less, same length each time | Up to 1 month |
+| Sprint Planning | Decide why, what and how for this Sprint | 8 hours |
+| Daily Scrum | Developers inspect progress and adjust the plan | 15 minutes |
+| Sprint Review | Show the Increment to stakeholders; adapt the backlog | 4 hours |
+| Sprint Retrospective | Improve how the team works | 3 hours |
+Shorter Sprints usually need shorter events. Two-week Sprints are the most common.
 = Why it works
 * sm
 " sm What should we change next Sprint?
 " dev Smaller stories.
-Scrum is empirical: **transparency, inspection, adaptation**. Everyone sees the real state, checks it often, and changes course.
-!! Dropping the Retrospective to save time removes the part that makes the team better.
+Scrum is **empirical**: decisions are based on what is observed, not on predictions. Its three pillars:
+- **Transparency**: the real state of work is visible to everyone.
+- **Inspection**: the team checks progress and the product often (every event is an inspection).
+- **Adaptation**: when something is off course, change it as soon as possible.
+!! Dropping the Retrospective to "save time" removes the part that makes the team better every Sprint.
 ? Who orders the Product Backlog? | Scrum Master | *Product Owner | Developers
 ^ https://scrumguides.org/scrum-guide.html The Scrum Guide (2020)
 
@@ -118,35 +180,54 @@ Scrum is empirical: **transparency, inspection, adaptation**. Everyone sees the 
 @ burn gauge 2 1 Burndown
 @ rev user 3 0 Review
 @ ret shield 4 0 Retrospective
-= Planning
+= Sprint Planning (day 1)
 + pb plan
 ~ pb>plan top items
-Three topics: **why** is this Sprint valuable (Sprint Goal), **what** can be done, **how** will it get done. Past velocity and real availability guide how much to take.
-= Daily Scrum
+The whole Scrum Team answers three questions:
+- **Why** is this Sprint valuable? The Product Owner proposes, and the team agrees a **Sprint Goal**, such as "a buyer can pay by card".
+- **What** can be done? The Developers pick items from the top of the Product Backlog, using past **velocity** (points finished in recent Sprints) and real availability: holidays, support duty.
+- **How** will it be done? They split items into tasks of a day or less.
+The result is the **Sprint Backlog**.
+= Daily Scrum (every day)
 " day Yesterday, today, blockers?
 + day
 ~ plan>day sprint backlog
 * day
-Fifteen minutes, same time and place, for the Developers. They inspect progress toward the Sprint Goal and adjust today's plan. It is not a status report to a manager.
-= Burndown
+Fifteen minutes, same time and place, for the Developers. They look at progress toward the Sprint Goal and plan the next 24 hours. Many teams walk the board from right to left: "what can we finish today?"
+Problems are noted and solved **after** the meeting by the people involved. It is not a status report to a manager.
+= Burndown chart
 + burn
 ~ day>burn work left
-A burndown plots work remaining per day. A flat line means nothing is finishing: probably too many items started at once.
 : burn warn flat line
+A **burndown chart** plots the work remaining (points or tasks) for each day of the Sprint against an ideal straight line down to zero.
+- Line below ideal: ahead of plan.
+- Line above ideal: behind; discuss scope with the Product Owner.
+- **Flat line** for days: nothing is finishing. Usually too many items are started at once and none completed.
+- Line going **up**: work was added during the Sprint.
 = When scope changes | PRACTICE
 * plan
-During the Sprint no change may endanger the **Sprint Goal**. Scope can be renegotiated with the Product Owner as more is learned. Only the Product Owner may cancel a Sprint, if the goal becomes obsolete.
-= Review
+During the Sprint:
+- no change may endanger the **Sprint Goal**;
+- quality does not decrease;
+- the Product Backlog is refined as needed;
+- scope can be clarified and renegotiated with the Product Owner as more is learned.
+Only the Product Owner may **cancel** a Sprint, and only if its goal becomes obsolete, for example after a company decision to drop the product.
+= Sprint Review (last day)
 " rev Nice. Can it sort by price?
 + rev
 ~ day>rev increment ;; rev>pb feedback
-The team shows what is done to stakeholders and together they decide what to do next. The backlog changes as a result.
-= Retrospective
+The team shows the **working Increment** to stakeholders: clients, users, management. It is a working session, not a slide show. Together they discuss what changed in the market and what to do next. The Product Backlog is updated as a result: "sort by price" becomes a new item.
+= Sprint Retrospective (last day)
 + ret
 ~ rev>ret
 * ret
-The team inspects how it worked: people, interactions, process, tools. Pick one or two improvements and act on them soon. The next Sprint starts immediately after.
+The team looks at **how** it worked: people, relationships, process, tools, Definition of Done. A simple format:
+- What went well?
+- What did not?
+- What will we try next Sprint?
+Pick one or two concrete improvements, give each an owner, and put them in the next Sprint Backlog so they really happen. The next Sprint starts immediately after.
 ? A burndown is flat for four days. Likely cause? | The team is ahead | *Many items started, none finished | The Sprint Goal changed
+^ https://scrumguides.org/scrum-guide.html#scrum-events Scrum Guide: events
 
 ## Kanban
 # kanban | Kanban | Beginner | Visualise work, limit it, and improve the flow.
@@ -159,28 +240,49 @@ The team inspects how it worked: people, interactions, process, tools. Pick one 
 ~ todo>dev pull
 w dev>rev change
 ~ rev>done
-Kanban starts from how you work today. Draw the workflow, put every item on it, and agree when an item counts as started and finished.
+**Kanban** (Japanese for "signboard") comes from Toyota's factories and was adapted to knowledge work. It starts from **how you work today**, with no new roles or events:
+1. Draw your workflow as columns: To do, In progress, Review, Testing, Done.
+2. Put every piece of work on the board as a card.
+3. Agree when a card counts as **started** and when it is **finished**.
+Suddenly everyone can see where work piles up.
 = Without limits | PROBLEM
 : dev err 9 items
 : rev err queue of 6
 " dev I will start another one.
 w dev>rev one more
 " rev I have six already!
-Everyone is busy and nothing finishes. Items wait in review while people start new ones.
+Without limits, people start new work whenever they are waiting for something. Soon the developer has nine items open, the reviewer has a queue of six, and nothing reaches Done. Everyone is busy; the customer gets nothing. Switching between many tasks also wastes time and causes mistakes.
 = WIP limits | SOLUTION
 : dev ok limit 3
 : rev ok limit 2
 " dev Review is full. I will help.
 w dev>rev help
 ~ rev>done finished
-Limit **work in progress** per column. If Review is full, nobody may push more in: people help clear it. Work is **pulled** when there is room.
-= Measure flow
+A **WIP limit** (work in progress) caps how many cards may be in a column at once. If Review allows 2 and already has 2, nobody may move another card in. Instead of starting something new, people **help finish** what is stuck: review a colleague's change, fix a failing test.
+Work is **pulled** into a column when there is room, not pushed in. The motto: **stop starting, start finishing**.
+= Measure the flow
 * done
 ~ todo>dev ;; dev>rev ;; rev>done
-The Kanban Guide asks for four measures: **WIP**, **throughput** (items finished per time), **work item age**, **cycle time** (start to finish).
-! Little's Law, for a stable system: average cycle time = average WIP ÷ average throughput. Halve WIP at the same throughput and cycle time halves.
+The Kanban Guide names four measures:
+| Measure | Meaning |
+| WIP | How many items are started but not finished |
+| Throughput | How many items are finished per day or week |
+| Work item age | How long an unfinished item has been in progress |
+| Cycle time | How long an item took from start to finish |
+! Little's Law, for a stable system: average cycle time = average WIP ÷ average throughput. Halve the WIP at the same throughput, and items finish twice as fast.
+= Service classes and policies
+Explicit **policies** make the board work:
+- an **Expedite** lane for real emergencies, limited to one card at a time;
+- a **Definition of Done** for each column, such as "Review is done when one person approved";
+- regular **replenishment** meetings to choose what enters To do next.
 = Kanban or Scrum?
 " rev Requests never stop, so no Sprints.
-Scrum has fixed-length Sprints, defined accountabilities and a Sprint Goal. Kanban has continuous flow and no prescribed roles. Support and operations teams often prefer Kanban. **Scrumban** mixes the two.
+| | Scrum | Kanban |
+| Rhythm | Fixed-length Sprints | Continuous flow |
+| Roles | Product Owner, Scrum Master, Developers | No prescribed roles |
+| Changes | Not during a Sprint if they endanger its goal | Any time, when there is capacity |
+| Limits | Amount chosen per Sprint | WIP limit per column |
+| Good for | Product development with a roadmap | Support, operations, maintenance, unpredictable requests |
+**Scrumban** mixes the two: Sprints and reviews, with WIP limits on the board.
 ? 12 items in progress, 3 finished per day. Average cycle time? | 3 days | *4 days | 36 days
 ^ https://kanbanguides.org/ The Kanban Guide

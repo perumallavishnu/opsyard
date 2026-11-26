@@ -10,24 +10,34 @@
 = In the dark | PROBLEM
 + app u
 ~ !app>u customers call
-If users tell you first, you are not monitoring.
+If customers tell you about an outage before your systems do, you are not monitoring. And if you know **that** something is broken but cannot find out **why**, every incident becomes a long guessing game.
+- **Monitoring** answers known questions: is it up, is it fast, is the disk full?
+- **Observability** is being able to answer new questions about the system from the data it produces, without shipping new code first.
 = Metrics
 + m
 ~ app>m 12 req/s
-Numbers over time. Cheap, good for alerts and trends.
+**Metrics** are numbers over time: requests per second, error rate, memory. They are cheap to store, fast to query and ideal for dashboards, trends and alerts. But they say **how much**, not **which request**.
 = Logs
 + l
 ~ app>l event
-Records of single events. Structured JSON with a request ID is searchable.
+**Logs** record single events with details: "payment for order 1009 failed: bank timeout". Structured as JSON with a request ID, they can be searched precisely. They are more expensive to store, so keep them for days or weeks, not years.
 = Traces
 + t
 ~ app>t spans
-The path of one request across services, with the time spent in each.
-= Four golden signals
+**Traces** follow one request across services and show how long each step took. They answer "where did the time go?" in systems with many services.
+The three are strongest together: a metric shows errors rising, a trace shows which service is slow, its logs show the exact error.
+= The four golden signals
 ~ m>u alert
 * m
-**Latency, traffic, errors, saturation.** RED (rate, errors, duration) for services; USE (utilisation, saturation, errors) for resources.
+Google's SRE book suggests four signals for any user-facing service:
+| Signal | Question |
+| Latency | How long do requests take? (separate successful and failed ones) |
+| Traffic | How much demand is there? |
+| Errors | What share of requests fail? |
+| Saturation | How full is the system? |
+Two shorter checklists: **RED** for services (Rate, Errors, Duration) and **USE** for resources like CPU or disks (Utilisation, Saturation, Errors).
 ? Which signal follows one request across services? | Metrics | Logs | *Traces
+^ https://sre.google/sre-book/monitoring-distributed-systems/ Google SRE: monitoring
 
 # ob-prom | Prometheus and Grafana | Intermediate | Pull metrics, query them, alert.
 @ a pod 0 0 App /metrics
@@ -36,27 +46,54 @@ The path of one request across services, with the time spent in each.
 @ g board 2 0 Grafana
 @ am gear 1 1 Alertmanager
 @ o user 2 1 On-call
-= Expose
+= Expose metrics
 + a n
+An application exposes its metrics as plain text on an HTTP page, usually `/metrics`:
+> # TYPE http_requests_total counter
 > http_requests_total{method="GET",status="200"} 1027
-A name, labels, a value. **Counter** only rises, **gauge** goes up and down, **histogram** counts by bucket.
+> http_requests_total{method="GET",status="500"} 3
+- # TYPE … counter = the metric's type
+- {method="GET",status="200"} = labels
+- 1027 = the current value
+Client libraries for every language produce this format. **Exporters** do it for things you cannot change: `node_exporter` for Linux servers, `postgres_exporter` for databases.
+$ curl -s localhost:9100/metrics | head
+- curl localhost:9100/metrics = look at what node_exporter exposes
 = Scrape
 + p
 ~ p>a pull ;; p>n pull
-Prometheus pulls targets on an interval and stores time series.
-!! Labels with unbounded values such as user IDs create millions of series.
-= PromQL
+**Prometheus** **pulls** ("scrapes") each target on a fixed interval and stores the values as time series on its disk.
+> scrape_configs:
+>   - job_name: shop
+>     scrape_interval: 15s
+>     static_configs:
+>       - targets: ["shop:8080"]
+- job_name = a label added to every series from these targets
+- scrape_interval: 15s = read every 15 seconds
+- targets = host:port to scrape; in Kubernetes, service discovery finds Pods automatically
+!! Labels with unbounded values (user IDs, full URLs) create millions of series and can bring Prometheus down.
+= Query with PromQL
 * p
 $ sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))
-The share of requests failing over 5 minutes.
-= Dashboards
+- http_requests_total{status=~"5.."} = series whose status label matches the pattern 5xx (`=~` means regex)
+- rate(…[5m]) = per-second increase, averaged over the last 5 minutes
+- sum(…) = add up all matching series
+- / = divide: failed requests ÷ all requests = error ratio
+$ histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))
+- histogram_quantile(0.99, …) = the 99th percentile response time from histogram buckets
+- by (le) = keep the bucket boundary label, which the function needs
+= Dashboards in Grafana
 + g
 ~ g>p query
-Start with golden signals. Few panels people read beat fifty they do not.
-= Alerts
+**Grafana** draws dashboards from Prometheus (and many other sources). Begin with the four golden signals for each service, plus deployment markers. Three panels that everyone reads beat fifty that nobody understands.
+= Alerts with Alertmanager
 + am o
 ~ p>am firing ;; am>o page
-Alertmanager groups, silences and routes. Page on **symptoms** users feel, and link a runbook.
+Prometheus evaluates **alert rules**; when one fires, it sends it to **Alertmanager**, which:
+- **groups** related alerts into one notification;
+- **routes** by labels: `severity=page` to the on-call phone, `team=payments` to that team's channel;
+- **silences** alerts during planned maintenance;
+- **inhibits** follow-up alerts (do not page for every service when the whole cluster is down).
+Page on **symptoms** users feel, and link a runbook in every alert.
 ? Request count is which metric type? | Gauge | *Counter | Label
 ^ https://prometheus.io/docs/ Prometheus docs
 
@@ -68,25 +105,42 @@ Alertmanager groups, silences and routes. Page on **symptoms** users feel, and l
 @ t board 2 1 Trace store
 = Vendor lock-in | PROBLEM
 + a b
-Each vendor's agent means changing code to change vendor.
+Every monitoring vendor used to have its own agent and libraries. Changing vendor meant changing code in every service, so companies stayed with tools they no longer liked.
 = OpenTelemetry
 + c
 ~ a>c OTLP ;; b>c OTLP
-Standard libraries and a protocol. Many frameworks need no code changes.
-= Collector
+**OpenTelemetry** (OTel) is a vendor-neutral standard, from the CNCF, for producing metrics, logs and traces: APIs and libraries for every major language, and one protocol, **OTLP**. Instrument once; send the data anywhere.
+For many languages, **automatic instrumentation** adds traces for HTTP, database and messaging calls without code changes:
+$ java -javaagent:opentelemetry-javaagent.jar -Dotel.service.name=payments -jar app.jar
+- -javaagent:… = load the OpenTelemetry Java agent
+- -Dotel.service.name=payments = the name that appears in traces
+= The Collector
 * c
-Receive, process (batch, filter, remove personal data), export.
-= Store
+The **OpenTelemetry Collector** is a separate program that sits between applications and storage:
+> receivers:  [otlp]
+> processors: [memory_limiter, batch, attributes/remove-pii]
+> exporters:  [otlphttp/tempo, loki]
+- receivers = how data arrives (OTLP, Prometheus, log files)
+- processors = what to do with it: limit memory, batch, delete personal data, sample
+- exporters = where to send it
+Changing vendor now means changing one exporter line.
+= Storage back-ends
 + l t
 ~ c>l ;; c>t
-Logs: Elasticsearch, OpenSearch, Loki. Traces: Jaeger, Tempo.
-= Join them
+| Signal | Open-source stores |
+| Metrics | Prometheus, Mimir, VictoriaMetrics |
+| Logs | Loki, Elasticsearch, OpenSearch |
+| Traces | Tempo, Jaeger |
+Commercial platforms (Datadog, New Relic, Honeycomb, Grafana Cloud, cloud providers' own) accept OTLP too.
+= Join the signals
 ~ a>b trace id
 * a b
-The trace ID passes in a `traceparent` header. Put it in logs to jump between them.
+The trace context travels between services in the `traceparent` header. If every log line also contains the `trace_id`, you can jump from a slow trace to its exact logs, and from an error log to the full trace.
 = Sampling
 * t
-Keep all errors and slow requests, a share of the rest.
+Recording every trace of a busy service is expensive. **Sampling** keeps a part:
+- **head sampling**: decide at the start, for example keep 10%;
+- **tail sampling** (in the Collector): decide after the request finished, so you can keep **all** errors and slow requests and only a few normal ones.
 ? What links services in one trace? | IP address | *Propagated trace context | Log level
 ^ https://opentelemetry.io/docs/ OpenTelemetry docs
 
@@ -98,33 +152,51 @@ Keep all errors and slow requests, a share of the rest.
 @ o flag 3 0 SLO 99.9%
 @ b bucket 3 1 Error budget
 @ d team 2 1 Team
-= 100% is wrong | PROBLEM
+= 100% is the wrong target | PROBLEM
 + u s
 ~ u>s
-Perfect reliability costs too much and stops all change. Users' own networks fail more often than that.
-= SLI
+Aiming for 100% availability costs enormous effort and stops all change, because every release is a risk. And users would not notice: their own Wi-Fi and phone networks fail far more often. The real question is: **how reliable is reliable enough?**
+= SLI: what you measure
 + i
 ~ s>i measure
-An indicator: good requests ÷ all requests.
-= SLO
+A **service level indicator** is a measurement of user experience, usually a ratio:
+> availability SLI = successful requests ÷ all valid requests
+> latency SLI      = requests faster than 300 ms ÷ all valid requests
+Measure as close to the user as possible, for example at the load balancer, not deep inside a server.
+= SLO: the target
 + o
 ~ i>o compare
-A target: 99.9% over 30 days. An **SLA** is a contract with consequences, usually looser.
+A **service level objective** is a target for an SLI over a period: "99.9% of requests succeed, measured over 30 days".
+An **SLA** (service level agreement) is a contract with customers with penalties, such as refunds. It is usually looser than the internal SLO, so you have a safety margin.
 = Error budget
 + b
 ~ o>b 0.1%
-99.9% over 30 days allows about **43 minutes** of full outage.
-= Spend it
+The **error budget** is what the SLO allows to fail: 100% − 99.9% = 0.1%.
+| SLO | Allowed full downtime in 30 days |
+| 99% | about 7 hours 12 minutes |
+| 99.9% | about 43 minutes |
+| 99.95% | about 22 minutes |
+| 99.99% | about 4 minutes |
+Each extra "nine" costs much more to achieve.
+= Spend the budget
 " d Budget is low. Slow down.
 + d
 ~ b>d
 : b warn 10% left
-Budget left: ship faster. Budget gone: work on reliability. The number decides, not the argument.
-= Burn rate
+The budget turns arguments into a rule agreed in advance:
+- **budget left**: release often, run experiments, take some risk;
+- **budget used up**: freeze risky releases and spend the time on reliability work until it recovers.
+Product and engineering agree on the policy before it is needed, so nobody argues during a crisis.
+= Burn-rate alerts
 * b
-Alert when the budget burns too fast: 14.4 times for an hour uses 2% of a 30-day budget.
+Alerting on every error is noisy. Instead, alert when the budget is being used too **fast**:
+> burn rate = actual error rate ÷ error rate the SLO allows
+- burn rate 1 = the budget lasts exactly 30 days
+- burn rate 14.4 for 1 hour = 2% of the monthly budget gone in one hour: page someone
+- burn rate 6 for 6 hours = 5% gone: page; slower burns become tickets
+This catches big outages in minutes and slow leaks in hours, without false alarms.
 ? 99.9% over 30 days allows about... | 4 minutes | *43 minutes | 7 hours
-^ https://sre.google/books/ Google SRE books
+^ https://sre.google/workbook/implementing-slos/ Google SRE workbook: implementing SLOs
 
 # sre-inc | Incidents, postmortems and chaos | Advanced | Respond, learn, rehearse.
 @ al flag 0 0 Alert
@@ -133,29 +205,51 @@ Alert when the budget burns too fast: 14.4 times for an hour uses 2% of a 30-day
 @ co user 2 1 Communications
 @ s server 3 0 Service
 @ pm doc 1 1 Postmortem
-= Detect
-An alert on a user-facing symptom starts the clock. Declare the incident early; it is cheap to stand down.
+= Detect and declare
 + al s
 ~ s>al errors
 : s err failing
+An alert on a user-facing symptom pages the on-call engineer. If users are affected, **declare an incident** early: open a channel, start a timeline. Declaring is cheap; standing down later costs nothing. Waiting too long is expensive.
+Many teams use **severity levels**: SEV1 (major outage, all hands), SEV2 (partial impact), SEV3 (minor).
 = Roles
 " ic You fix, you inform, I coordinate.
 " op Rolling back now.
 + ic op co
 ~ al>ic page ;; ic>op ;; ic>co
-One commander coordinates, responders act, one person updates others. The commander does not type fixes.
+| Role | Does |
+| Incident commander | Coordinates, decides, keeps the timeline; does **not** type fixes |
+| Responders | Investigate and act on the systems |
+| Communications lead | Updates the status page, support and leadership on a fixed schedule |
+Clear roles stop five people from changing the same system at once and keep everyone informed.
 = Mitigate first
 ~ op>s roll back
 : s ok stable
-Restore service before finding the cause: roll back, switch over, add capacity, turn off a flag.
-= Postmortem
+The first goal is to **restore service**, not to find the root cause. Fast mitigations:
+- roll back the last release;
+- turn off a feature flag;
+- fail over to another zone or region;
+- add capacity or shed load.
+Investigation continues afterwards, calmly, with the system healthy.
+= Blameless postmortem
 + pm
 ~ ic>pm
-**Blameless**: timeline, impact, causes, what helped, actions with owners. Ask how the system allowed it.
+After any significant incident, write a **postmortem**:
+- summary and **impact** (who, how long, how badly);
+- **timeline** of detection, decisions and actions;
+- **contributing causes**, technical and organisational;
+- what went well, what was lucky;
+- **action items**, each with an owner and a date.
+It is **blameless**: ask "how did the system let a person make this mistake?", not "who did it?". People then report problems openly instead of hiding them.
 = Chaos engineering
 ~ !op>s kill one
 * s
-Set a hypothesis, limit the blast radius, break something on purpose, watch. Start outside production.
+**Chaos engineering** means breaking things on purpose, in a controlled way, to find weaknesses before real failures do:
+1. State a hypothesis: "if one database replica dies, checkout keeps working".
+2. Limit the blast radius: one instance, a small share of traffic, in staging first.
+3. Inject the failure: stop an instance, add network delay, fill a disk.
+4. Observe, and stop at once if users are hurt.
+Tools: AWS Fault Injection Service, Chaos Mesh and LitmusChaos for Kubernetes. **Game days** rehearse incidents with the whole team.
 = Toil
-Repeated manual work that grows with the service. SRE practice aims to keep it under half of the time.
+**Toil** is manual, repetitive work that grows with the service and has no lasting value: restarting a stuck job by hand every morning, copying certificates. Google's SRE practice aims to keep toil under half of an engineer's time and to automate the rest.
 ? First goal in an incident? | Find who did it | *Restore service | Write the report
+^ https://sre.google/sre-book/postmortem-culture/ Google SRE: postmortem culture

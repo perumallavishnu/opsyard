@@ -58,68 +58,175 @@ CI moves into the code host: GitLab CI and GitHub Actions. Pipelines become file
 # c-pipe | Pipeline, stage, job | Beginner | The shape of every delivery system.
 @@ user Developer ; gear Pipeline ; rack Production ; shield Stages
 = Without it | PROBLEM
-Each person releases in their own way.
+Each person releases in their own way: one runs the tests, another forgets; one builds on a laptop, another on a server. Releases depend on who is on duty, and nobody can say exactly what was done.
 = What it is | SOLUTION
-A fixed path every change travels. **Stages** run in order, **jobs** inside a stage can run together.
-= How it works
-Typical stages: build, unit test, scan, package, deploy to test, integration test, approve, deploy.
+A **pipeline** is a fixed, automated path that every change travels from commit to production. It is written as a file in the repository, so it is reviewed and versioned like code.
+- A **stage** is a phase, such as Build or Test. Stages run **in order**; if one fails, the pipeline stops.
+- A **job** is a unit of work inside a stage. Jobs in the same stage can run **in parallel** to save time.
+- A **step** is one command inside a job.
+- A **trigger** starts the pipeline: a push, a pull request, a schedule or a button.
+= Typical stages
+| Stage | Question it answers |
+| Build | Does the code compile and install? |
+| Unit test | Do the small pieces work? |
+| Scan | Are there known vulnerabilities or leaked secrets? |
+| Package | Create the artifact (image, zip) with a version |
+| Deploy to test | Does it start in a real environment? |
+| Integration test | Do the parts work together? |
+| Approve | Does a person agree to release? (optional) |
+| Deploy to production | Release, then check it is healthy |
+= A pipeline as a file
+The same idea in any tool; here in GitHub Actions syntax:
+> on: [push]
+> jobs:
+>   build:
+>     runs-on: ubuntu-latest
+>     steps:
+>       - uses: actions/checkout@v4
+>       - run: npm ci
+>       - run: npm run build
+>   test:
+>     needs: build
+>     runs-on: ubuntu-latest
+>     steps:
+>       - uses: actions/checkout@v4
+>       - run: npm ci
+>       - run: npm test
+- on: [push] = the trigger
+- build / test = two jobs; `needs: build` makes test a later stage
+- run: npm ci = a step: install exact dependencies from the lockfile (`ci` = clean install)
+- run: npm test = a step that fails the job if any test fails
+Jenkins writes the same with `stage('Build') { steps { sh 'npm ci' } }`, GitLab with `stages:` in `.gitlab-ci.yml`.
+= Fail fast
+Order matters. Put the fastest, most likely failures first: lint and unit tests take seconds, end-to-end tests take minutes. A developer who learns of a problem in two minutes fixes it while still thinking about the change; after an hour, they have moved on.
+! Aim for a pipeline under about ten minutes to the first useful result.
 = Real-time example | PRACTICE
-A change with a failing test stops at minute two. It never reaches a person, let alone a customer.
+A developer pushes a change with a broken test at 10:02. At 10:04 the pipeline is red and shows the failing test. The change never reaches a reviewer, let alone a customer. She fixes it at 10:10 and the pipeline turns green.
 ? Jobs in one stage can... | never run | *run together | skip the code
+^ https://www.redhat.com/en/topics/devops/what-cicd-pipeline Red Hat: what is a CI/CD pipeline
 
 # c-artifact | Artifact and registry | Beginner | The thing you actually ship.
 @@ gear Build ; box Artifact ; server Servers ; bucket Registry
 = Without it | PROBLEM
-Each server builds the code itself, and each result is a little different.
+Each server builds the code itself from source. One gets a slightly newer library, another a different compiler. The version in production is not exactly the one that was tested, and nobody can rebuild last month's version exactly.
 = What it is | SOLUTION
-An **artifact** is the result of a build: image, package, zip. A **registry** stores it by version.
-= How it works
-Build once, store, use the same one everywhere. Docker Hub, GHCR, Nexus, Artifactory, ECR.
+An **artifact** is the finished output of a build, ready to run: a container image, a `.jar`, an `.npm` package, a `.zip` of a website.
+A **registry** (or repository manager) stores artifacts by name and version, so any environment can fetch exactly the same file.
+| Kind | Registry examples |
+| Container images | Docker Hub, GitHub Container Registry (GHCR), Amazon ECR |
+| Java, npm, Python packages | Nexus, Artifactory, GitHub Packages |
+| Files and binaries | S3, GitHub Releases |
+= Build and store an image
+$ docker build -t ghcr.io/acme/shop:1.8.2 .
+- docker build = build an image from the Dockerfile
+- -t ghcr.io/acme/shop:1.8.2 = tag (name) it: registry address, owner, image name, then `:` and the version
+- . = the build context: use the current folder
+$ docker push ghcr.io/acme/shop:1.8.2
+- docker push = upload the image to that registry
+= Versions you can trust
+- Use a unique version per build, such as `1.8.2` or the Git commit `3f9a2c1`, never only `latest`.
+- Make versions **immutable**: once `1.8.2` is pushed, it must never change. Most registries can enforce this.
+- An image also has a **digest** (`sha256:4a1f…`) calculated from its content. Deploying by digest guarantees the exact bytes.
+$ docker pull ghcr.io/acme/shop@sha256:4a1f9c…
+- @sha256:… = fetch by content digest instead of by tag
+= Build once, deploy many
+The same artifact goes to test, then staging, then production. Only the **settings** differ (database address, feature switches), and they are given when the artifact starts, not built into it.
 = Real-time example | PRACTICE
-Production fails. The team redeploys artifact 1.8.1 from the registry in two minutes; no rebuild.
+Version 1.9.0 causes errors in production. Because 1.8.1 is still in the registry, the team redeploys it in two minutes. Nothing is rebuilt, so they know it is exactly the version that ran fine yesterday.
 ? Build how often per version? | Per server | *Once | Never
+^ https://docs.docker.com/get-started/docker-concepts/the-basics/what-is-a-registry/ Docker: what is a registry
 
 # c-envs | Environments | Beginner | Places to try before customers see it.
 @@ box Version ; server Staging ; rack Production ; server Test
 = Without them | PROBLEM
-Customers are the testers.
+If every change goes straight to the live system, customers are the testers. A mistake in a database migration or a wrong setting is found by people trying to pay.
 = What they are | SOLUTION
-Separate copies of the system: development, test, staging, production.
-= How it works
-Same artifact, different settings and data. Staging should look as much like production as you can afford.
+An **environment** is a separate, complete copy of the system where a version runs.
+| Environment | Who uses it | Purpose |
+| Development | Developers | Try things, may break often |
+| Test / QA | Testers, automated tests | Check features and run test suites |
+| Staging | The team, sometimes clients | Final check, as close to production as possible |
+| Production | Real users | The live system |
+Small teams may only have test and production; large ones add more, such as performance or pre-production.
+= What changes between them
+The **artifact** is the same everywhere. What changes is **configuration**:
+> DB_HOST=db.staging.internal
+> PAYMENT_MODE=sandbox
+> LOG_LEVEL=debug
+- DB_HOST = which database to use
+- PAYMENT_MODE=sandbox = fake payments in staging; `live` only in production
+- LOG_LEVEL = more detail in test, less in production
+Settings come from environment variables, config files or a config service. Secrets come from a secret store.
+= Keep staging honest
+Staging only catches problems if it resembles production:
+- the same operating system, versions and kind of infrastructure;
+- realistic amounts of data, using a **masked** copy (names, emails and card numbers replaced);
+- the same deployment process, so the deployment itself is tested too.
 = Real-time example | PRACTICE
-A date bug appears only with the real amount of data. Staging with a masked copy of production data shows it.
+A report runs in seconds in test, which has 200 orders. In staging, loaded with a masked copy of production's 4 million orders, it takes eleven minutes and times out. The team adds a database index before the release, instead of after angry customers.
 ? Staging should resemble... | a laptop | *production | nothing
+^ https://12factor.net/dev-prod-parity Twelve-Factor App: dev/prod parity
 
 # c-testtypes | Types of tests | Beginner | What each test catches.
 @@ user Developer ; shield Tests ; server System ; user Tester
 = Without them | PROBLEM
-Every change may break something, and you learn it from users.
+Every change can break something somewhere else. Without tests you find out from users, and checking everything by hand before each release takes days.
 = What they are | SOLUTION
-| Test | Question |
-| Unit | Does this function work? |
-| Integration | Do parts work together? |
-| End to end | Can a user finish the task? |
-| Regression | Does the old still work? |
-| Smoke | Is it alive after deploy? |
-| Load | Can it carry the traffic? |
-| Security | Can it be abused? |
-| Acceptance | Is it what was asked? |
-= How they fit
-Fast ones first, on every change. Slow ones later or at night.
+Each kind of test answers a different question:
+| Test | Question | Speed |
+| Unit | Does this one function work? | Milliseconds |
+| Integration | Do parts work together, for example code and database? | Seconds |
+| Contract | Does a service still answer as its users expect? | Seconds |
+| End to end | Can a user finish a task in the real app? | Minutes |
+| Regression | Does what worked before still work? | Varies |
+| Smoke | Is it alive right after a deploy? | Seconds |
+| Load / performance | Can it carry expected traffic? | Minutes to hours |
+| Security | Can it be abused? | Varies |
+| Acceptance | Is it what the client asked for? | Varies |
+= A unit test
+> test('refund of zero is rejected', () => {
+>   expect(() => refund(0)).toThrow('Amount must be positive');
+> });
+- test('…') = one test with a description of the expected behaviour
+- refund(0) = call the code under test with a chosen input
+- expect(…).toThrow(…) = the check; if it is false, the test fails
+$ npm test
+- npm test = run the project's test command; exit code 0 if all pass
+= Where they run
+- On **every change**: lint, unit, fast integration tests.
+- **Before merging**: plus contract and a few end-to-end tests.
+- **After deploy**: smoke tests, at once.
+- **Nightly or weekly**: long end-to-end suites, load and deep security scans.
 = Real-time example | PRACTICE
-A smoke test after each deploy logs in and opens one order. It caught a missing setting in 30 seconds.
+After each deploy a smoke test logs in as a test user and opens one order. One Friday it fails 30 seconds after release: a new setting was missing in production. The pipeline rolls back automatically, before a single customer notices.
 ? After a deploy, first run... | load tests | *smoke tests | unit tests
+^ https://martinfowler.com/articles/practical-test-pyramid.html The practical test pyramid
 
 # c-rollback | Rollback and roll forward | Beginner | Getting out of trouble.
 @@ user On-call ; gear Rollback ; rack Production ; bucket Last good version
 = Without it | PROBLEM
 " a Who remembers the old settings?
-A bad release, and no way back.
+A release goes wrong at night. Nobody knows exactly what the previous version was, how it was configured, or how to put it back. The outage lasts hours.
 = What it is | SOLUTION
-**Rollback** returns to the last good version. **Roll forward** releases a quick fix.
-= How it works
-Keep the last artifacts and make database changes that both versions can use.
+- **Rollback** returns to the last version that worked.
+- **Roll forward** fixes the problem with a new, quick release instead.
+Rollback is usually first: restore service now, find the cause calmly afterwards.
+= How to make rollback possible
+- Keep previous artifacts in the registry, with their exact versions.
+- Keep configuration in Git, so old settings can be restored too.
+- Make database changes that the **old and new** versions can both use (add a column first, remove the old one in a later release).
+- Practise it: a rollback that has never been tried may not work.
+= Roll back with common tools
+$ kubectl rollout undo deployment/shop
+- kubectl rollout undo = Kubernetes: go back to the previous version of a Deployment
+- deployment/shop = which one
+$ git revert 3f9a2c1 && git push
+- git revert = with GitOps, undo the commit that changed the version; the agent deploys the old one
+$ helm rollback shop 41
+- helm rollback shop 41 = return the Helm release `shop` to its revision 41
+= Automatic rollback
+A pipeline can watch error rate and response time after a release. If they cross a limit within the first minutes, it rolls back by itself and alerts the team. Canary releases make this safer by exposing only a small share of users first.
 = Real-time example | PRACTICE
-Errors rise after a canary. The pipeline sends traffic back by itself in one minute, and the team finds the cause in calm.
+Error rates jump from 0.1% to 4% three minutes after a canary release reaches 10% of users. The pipeline sends all traffic back to the old version within a minute. The team then finds a missing database index in daylight, without pressure.
 ? Rollback is hard when... | code changed | *the database changed in an incompatible way | it is Friday
+^ https://sre.google/sre-book/release-engineering/ Google SRE book: release engineering

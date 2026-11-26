@@ -11,23 +11,33 @@
 + l s
 ~ !l>s copy code
 : s err wrong version
-The server has another Python, another library, another config.
+The code runs on the developer's laptop. On the server it crashes: the server has an older Python, a missing system library and a different configuration file. Code alone is not enough; it depends on its environment.
 = Ship the environment | SOLUTION
 + c
 ~ l>c pack ;; c>s run
 : s ok same
-An **image** holds the app, libraries and settings. A running image is a **container**.
+Docker packs the application **together with** its environment into an **image**: the right Python, the libraries, the settings. A running image is a **container**. The server only needs Docker; whatever is inside the image runs the same there as on the laptop.
 = Not a virtual machine
 + vm
 * vm c
-A VM boots its own kernel and takes gigabytes. A container is a normal process that shares the host kernel, isolated from others. It starts in milliseconds to seconds.
+| | Virtual machine | Container |
+| Contains | A whole operating system with its own kernel | The app and its libraries; shares the host kernel |
+| Size | Gigabytes | Megabytes |
+| Start time | Minutes | About a second |
+| Isolation | Strong: separate kernel | Good, but shares one kernel |
+Many companies run containers **inside** VMs: VMs separate customers or teams, containers pack applications.
 = How isolation works
 * c
-Linux **namespaces** limit what it sees: processes, network, files, users. **cgroups** limit what it uses: CPU and memory. A layered filesystem gives it its own root.
+A container is a normal Linux process with three kernel features applied:
+- **namespaces** limit what it can **see**: its own process list (it sees itself as PID 1), its own network, its own file tree, its own host name;
+- **cgroups** (control groups) limit what it can **use**: CPU, memory, number of processes;
+- a **layered file system** (overlayfs) gives it the image's files as its root, plus a writable layer.
+$ docker run --rm alpine ps
+- ps inside a container = shows only the container's own processes, not the host's
 = What it is not | RISK
-Sharing a kernel is weaker isolation than a VM. For untrusted code add a sandbox such as gVisor or a microVM.
+Because all containers share the host's kernel, a kernel bug can let a process escape its container. That is weaker isolation than a VM. For code you do not trust (customer code, unknown pull requests), add a sandbox such as **gVisor** or a micro-VM like **Firecracker** or **Kata Containers**.
 ? What limits a container's memory? | Namespaces | *cgroups | The image
-^ https://docs.docker.com/get-started/ Docker docs
+^ https://docs.docker.com/get-started/docker-overview/ Docker overview
 
 # dk-arch | Docker architecture | Beginner | Client, daemon, containerd and registry.
 @ cli laptop 0 0 docker CLI
@@ -40,29 +50,40 @@ Sharing a kernel is weaker isolation than a VM. For untrusted code add a sandbox
 + cli d
 ~ cli>d REST API
 $ docker run -d -p 8080:80 nginx
-The client sends it to the daemon.
+- docker = the CLI, a small client program
+- run = the request: create and start a container
+The CLI does not run containers itself. It sends the request over an API to the **Docker daemon**, `dockerd`, a background service.
 = Find the image
 + r
 ~ d>r pull nginx ;; r>d layers
-Not present locally, so it is pulled from Docker Hub. The full name is `docker.io/library/nginx:latest`.
-= Hand over
+The daemon checks whether the image is on this machine. It is not, so it pulls it. `nginx` is short for its full name:
+> docker.io/library/nginx:latest
+- docker.io = Docker Hub, the default registry
+- library = the namespace of official images
+- latest = the default tag when none is given
+= Hand over to containerd
 + cd
 ~ d>cd
-**containerd** manages images and container life. Since Engine 29 its image store is the default on fresh installs.
-= Create the process
+**containerd** is the container runtime that manages images on disk and the life of containers. Kubernetes also uses containerd directly, without dockerd. Since Docker Engine 29, containerd's image store is the default on fresh installs.
+= Create the process with runc
 + rc c
 ~ cd>rc ;; rc>c start
-**runc** sets up namespaces and cgroups, starts the process, and exits.
+**runc** is a small program that follows the OCI standard: it creates the namespaces and cgroups, sets up the root file system, starts the container's main process, and exits. The process keeps running under containerd's watch.
 = The result
 : c ok :8080
-Port 8080 on the host now reaches port 80 in the container.
+Port 8080 on the host now forwards to port 80 in the container.
 $ docker ps
+> CONTAINER ID  IMAGE  COMMAND                 STATUS        PORTS
+> 3f9a2c1b7d2e  nginx  "/docker-entrypoint.…"  Up 5 seconds  0.0.0.0:8080->80/tcp
+- 0.0.0.0:8080->80/tcp = any address of the host, port 8080, forwards to port 80 inside
 = Lock the socket | RISK
-The CLI reaches the daemon through `/var/run/docker.sock`. The daemon runs as root and can mount any host folder into a container.
 * d
 : d warn root power
-!! Anyone who can use the Docker socket effectively has root on that host.
+The CLI talks to the daemon through a socket file, `/var/run/docker.sock`. The daemon runs as **root** and will do whatever it is asked, including starting a container that mounts the host's whole disk:
+> docker run -v /:/host ubuntu
+!! Anyone who can use the Docker socket effectively has root on that host. Never mount it into containers you do not fully trust, and keep the `docker` group small.
 ? What actually creates the container process? | The CLI | *runc | The registry
+^ https://docs.docker.com/get-started/docker-overview/#docker-architecture Docker architecture
 
 # dk-life | Container life cycle | Beginner | Create, run, stop, inspect, remove.
 @ i stack 0 0 Image
@@ -73,33 +94,65 @@ The CLI reaches the daemon through `/var/run/docker.sock`. The daemon runs as ro
 = Create and start
 + i c r
 ~ i>c create ;; c>r start
-$ docker run -d --name web nginx
-`run` is create plus start. `-d` runs in the background.
+$ docker run -d --name web -e TZ=Asia/Kolkata nginx:1.28
+- run = `docker create` (prepare) plus `docker start` (run) in one command
+- -d = in the background
+- --name web = a fixed name
+- -e TZ=Asia/Kolkata = set an environment variable inside
+A container moves through states: **created**, **running**, **paused**, **exited** (stopped), and finally **removed**.
 = Look inside
-`logs` shows what the app printed, `exec` opens a shell beside it, `stats` shows live resource use, and `inspect` prints the full configuration.
 * r
-$ docker logs -f web
+$ docker logs -f --tail 100 web
+- logs = what the main process printed to its output
+- -f = follow; --tail 100 = start from the last 100 lines
 $ docker exec -it web sh
+- exec = run an extra command in a running container
+- -it = interactive with a terminal
+- sh = a shell; use `bash` if the image has it
 $ docker stats
+- stats = live CPU, memory and network use of all containers
 $ docker inspect web
+- inspect = the full configuration and state as JSON: IP address, mounts, environment, exit code
 = Stop
 + s
 ~ r>s SIGTERM
 $ docker stop web
-Sends SIGTERM, waits 10 seconds by default, then SIGKILL. The main process (PID 1) must handle SIGTERM to finish cleanly.
+- stop = send SIGTERM to the main process, wait (10 seconds by default), then SIGKILL
+$ docker stop -t 30 web
+- -t 30 = wait up to 30 seconds before forcing
+The main process runs as **PID 1** inside the container. If it ignores SIGTERM (common with shell scripts as the entry point), every stop takes the full 10 seconds and then kills it hard, without cleanup.
 = Exit codes
 : s err 137
-0 clean. 1 app error. 137 killed by SIGKILL, often out of memory. 143 stopped by SIGTERM. 127 command not found.
-= Restart policy
-`no` is the default. `on-failure` restarts after an error. `always` and `unless-stopped` also come back after a reboot; the second respects a manual stop.
+$ docker ps -a --filter name=web
+- ps -a = include stopped containers; the STATUS column shows `Exited (137)`
+| Code | Usually means |
+| 0 | Clean, normal exit |
+| 1 | The application reported an error |
+| 125 | Docker itself failed to start the container (bad option) |
+| 126 / 127 | Command cannot run / not found inside the image |
+| 137 | Killed by SIGKILL, very often out of memory |
+| 143 | Stopped by SIGTERM |
+= Restart policies
 ~ s>r restart
-$ docker run -d --restart unless-stopped nginx
-= Remove
+$ docker run -d --restart unless-stopped nginx:1.28
+- --restart = what Docker does when the container stops by itself
+| Policy | Restarts after a crash | After the host reboots |
+| `no` (default) | No | No |
+| `on-failure` | Yes, only on non-zero exit | No |
+| `always` | Yes | Yes, even if you stopped it by hand |
+| `unless-stopped` | Yes | Yes, unless you stopped it by hand |
+= Remove and clean up
 + x
 ~ s>x rm
 $ docker rm web
-Files written inside the container are gone. Data you need belongs in a volume.
+- rm = delete a stopped container and its writable layer
+$ docker container prune
+- container prune = delete all stopped containers
+$ docker system df
+- system df = how much disk images, containers, volumes and build cache use
+Anything written inside the container is gone with it. Keep data in volumes.
 ? Exit code 137 often means... | Command not found | *Killed, often out of memory | Clean exit
+^ https://docs.docker.com/reference/cli/docker/container/run/ docker run reference
 
 ## Images
 # dk-file | Writing a Dockerfile | Beginner | Each instruction and the layer it makes.
@@ -108,40 +161,59 @@ Files written inside the container are gone. Data you need belongs in a volume.
 @ d layer 2 0 RUN npm ci
 @ c layer 3 0 COPY . .
 @ i stack 4 0 Image
-= Base
+= Choose a base
 + f b
 ~ f>b
 > FROM node:24-slim
 > WORKDIR /app
-`FROM` picks a starting image. Pin a version, not `latest`.
-= Dependencies
+- FROM node:24-slim = start from the official Node.js 24 image, "slim" variant (fewer extra tools, smaller)
+- WORKDIR /app = create `/app` and make it the current folder for the next instructions
+Pin a version. `FROM node` means "whatever is latest today", and your build can change without any change in your code.
+= Dependencies first
 + d
 ~ b>d
-> COPY package*.json ./
+> COPY package.json package-lock.json ./
 > RUN npm ci --omit=dev
-`COPY` adds files, `RUN` executes at build time.
-= Application
+- COPY … ./ = copy only the dependency files into `/app`
+- RUN npm ci = run at **build** time: install exactly what the lockfile lists
+- --omit=dev = skip development-only packages such as test tools
+Each `RUN`, `COPY` and `ADD` creates a new layer.
+= Then the application
 + c
 ~ d>c
 > COPY . .
 > USER node
 > EXPOSE 3000
 > CMD ["node", "server.js"]
-`USER` drops root. `EXPOSE` only documents a port. `CMD` is the default command.
+- COPY . . = copy the rest of the project (minus what `.dockerignore` excludes)
+- USER node = run the app as the unprivileged user `node` that the base image provides
+- EXPOSE 3000 = documents the port; it does **not** publish it, `-p` does
+- CMD [...] = the default command when a container starts
 = Build
-The final dot is the **build context**: the folder whose files the build may copy. BuildKit runs the instructions and names the result.
 + i
 ~ c>i
 $ docker build -t shop:1.0 .
-= Layer cache
+- -t shop:1.0 = name and tag the image
+- . = the build context sent to the builder
+$ docker build --no-cache -t shop:1.0 .
+- --no-cache = ignore the layer cache and rebuild everything (for example to pick up security updates)
+= The layer cache
 * d c
 : d ok cached
 : c warn rebuilt
-If a layer's inputs did not change, it is reused; everything after a change is rebuilt. Copy dependency files **before** source code.
-= ENTRYPOINT and CMD
+When you rebuild, Docker reuses each layer whose instruction **and input files** have not changed. As soon as one layer changes, every layer after it is rebuilt.
+That is why dependency files are copied before the source code: editing `server.js` changes only the `COPY . .` layer, and the slow `npm ci` layer comes from the cache. Builds drop from minutes to seconds.
+= ENTRYPOINT, CMD and .dockerignore
 * i
-ENTRYPOINT is the program, CMD its default arguments. Use the JSON form so signals reach your process. Add a `.dockerignore` for `node_modules`, `.git` and secrets.
+- **ENTRYPOINT** is the program that always runs; **CMD** gives its default arguments, which `docker run image other-args` can replace.
+- Use the **JSON form** `["node", "server.js"]`. The plain form `node server.js` runs through `/bin/sh`, which does not pass SIGTERM to your app.
+A `.dockerignore` file keeps things out of the build:
+> node_modules
+> .git
+> .env
+> *.log
 ? Why copy package.json before the source? | It is required | *Dependencies stay cached when code changes | Smaller image
+^ https://docs.docker.com/build/building/best-practices/ Dockerfile best practices
 
 # dk-multi | Small and safe images | Intermediate | Multi-stage builds, secrets, scanning, platforms.
 @ b gear 0 0 Build stage
@@ -152,12 +224,12 @@ ENTRYPOINT is the program, CMD its default arguments. Use the JSON form so signa
 = Too big | PROBLEM
 + b
 : b err 1.2 GB
-Compilers and test tools in production are slow to pull and give attackers more to use.
-= Multi-stage | SOLUTION
-The first stage has the compiler. The second starts from a tiny base and copies only the finished program.
+An image built from a full SDK image contains compilers, test tools and package caches. It is slow to pull on every server, costs storage, and gives an attacker who gets inside many tools to use.
+= Multi-stage builds | SOLUTION
 + t
 ~ b>t only the binary
 : t ok 25 MB
+A Dockerfile can have several `FROM` lines. Each starts a **stage**. Only the last stage becomes the image; earlier stages are thrown away.
 > FROM golang:1.26 AS build
 > WORKDIR /src
 > COPY . .
@@ -166,23 +238,40 @@ The first stage has the compiler. The second starts from a tiny base and copies 
 > COPY --from=build /app /app
 > USER nonroot
 > ENTRYPOINT ["/app"]
-= Build secrets
+- AS build = name the first stage `build`
+- RUN … go build -o /app = compile a single program file
+- FROM gcr.io/distroless/static = a minimal base with no shell and no package manager
+- COPY --from=build /app /app = copy only the compiled program from the build stage
+= Secrets during build
 * b
 ~ b>t
-$ docker build --secret id=npm,src=.npmrc .
-Secrets mounted during one RUN do not stay in a layer. ARG and ENV do.
-= Scan
+A build sometimes needs a secret, such as a token for a private package registry. Never use `ARG` or `ENV` for it: their values are stored in the image's history.
+> RUN --mount=type=secret,id=npm,target=/root/.npmrc npm ci
+$ docker build --secret id=npm,src=.npmrc -t shop:1.0 .
+- --mount=type=secret,id=npm,target=… = make the secret available as a file only during this one `RUN`
+- --secret id=npm,src=.npmrc = which local file to provide as secret `npm`
+The file is never written into any layer.
+= Scan for vulnerabilities
 + s
 ~ t>s
 $ docker scout cves shop:1.0
-$ trivy image shop:1.0
-Rebuild regularly: base images receive fixes.
-= Sign and publish
+- scout cves = list known vulnerabilities (CVEs) in the image's packages
+$ trivy image --severity HIGH,CRITICAL shop:1.0
+- trivy image = an open-source scanner
+- --severity HIGH,CRITICAL = show only serious findings
+New vulnerabilities are found every day in old packages. Rebuild images regularly, even without code changes, to pick up fixed base images.
+= Build for several platforms, sign and publish
 + g r
 ~ t>g cosign ;; t>r push
 $ docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/acme/shop:1.0 --push .
-Deploy by **digest** (`@sha256:...`), which cannot be moved as a tag can.
+- buildx build = the extended builder (BuildKit)
+- --platform linux/amd64,linux/arm64 = build for Intel/AMD and for ARM (Graviton, Apple silicon) at once
+- --push = push the result straight to the registry
+$ cosign sign ghcr.io/acme/shop@sha256:4a1f…
+- cosign sign = attach a signature so servers can verify the image came from your pipeline
+Deploy by **digest**, which cannot be moved the way a tag can.
 ? What does multi-stage remove? | The app | *Build tools from the final image | The need for tags
+^ https://docs.docker.com/build/building/multi-stage/ Docker: multi-stage builds
 
 ## Data and networks
 # dk-vol | Volumes and storage | Beginner | Keeping data when containers go away.
@@ -195,29 +284,40 @@ Deploy by **digest** (`@sha256:...`), which cannot be moved as a tag can.
 + c w
 ~ c>w write
 : w err lost on rm
-Files written in a container go to a thin layer that dies with it.
+Everything a container writes goes to its thin **writable layer**. When the container is removed (for example to upgrade the image), the layer and its files are deleted. For a database, that means all data.
 = Volumes | SOLUTION
 + v
 ~ c>v /var/lib/postgresql
 $ docker volume create pgdata
-$ docker run -d -e POSTGRES_PASSWORD=dev -v pgdata:/var/lib/postgresql postgres:18
-Docker manages the place. The volume outlives containers.
+$ docker run -d --name db -e POSTGRES_PASSWORD=dev -v pgdata:/var/lib/postgresql postgres:18
+- -v pgdata:/var/lib/postgresql = mount the volume named `pgdata` at that path inside
+Docker stores the volume on the host (under `/var/lib/docker/volumes/`) and keeps it until you delete it. Containers come and go; the volume stays.
 PostgreSQL 18 images expect the mount at `/var/lib/postgresql`; version 17 and older used `/var/lib/postgresql/data`.
 = Bind mounts
 + h
 ~ c>h host path
 $ docker run --rm -v "$PWD":/app -w /app node:24 npm test
-A host folder appears inside. Good for development.
+- -v "$PWD":/app = mount the current host folder at `/app`
+- -w /app = working directory inside
+A **bind mount** shows a host folder you choose. Changes on either side are visible on the other at once. Perfect for development; in production, volumes are usually safer because the host's folder layout does not leak in.
+$ docker run --rm -v "$PWD/config":/etc/app:ro shop:1.0
+- :ro = read-only: the container can read the files but not change them
 = tmpfs
 + t
 ~ c>t memory
-In memory only: for short-lived sensitive files.
-= Back up
+$ docker run --tmpfs /tmp:size=64m shop:1.0
+- --tmpfs /tmp:size=64m = a 64 MB folder in memory, never written to disk, gone when the container stops
+Good for temporary files and sensitive data that should never touch a disk.
+= Back up a volume
 * v
-$ docker run --rm -v pgdata:/d -v "$PWD":/b alpine tar czf /b/pgdata.tgz /d
-Stop the database first, or use its own dump tool, so the copy is consistent.
-!! `docker compose down -v` and `docker volume prune` delete data.
+$ docker run --rm -v pgdata:/d -v "$PWD":/b alpine tar czf /b/pgdata.tgz -C /d .
+- -v pgdata:/d = mount the volume to back up
+- -v "$PWD":/b = mount the current folder to write the archive into
+- tar czf /b/pgdata.tgz -C /d . = compress everything in the volume into one file
+For databases, stop the database first or, better, use its own dump tool (`pg_dump`, `mysqldump`) so the backup is consistent.
+!! `docker compose down -v` and `docker volume prune` delete volumes, and the data in them.
 ? Best place for database files? | Writable layer | *Volume | tmpfs
+^ https://docs.docker.com/engine/storage/ Docker: storage
 
 # dk-net | Container networking | Intermediate | Bridges, names and published ports.
 Z br 1 0 2 2 bridge: shopnet
@@ -226,29 +326,41 @@ Z br 1 0 2 2 bridge: shopnet
 @ w box 1 0 web
 @ a box 2 0 api
 @ d db 2 1 db
-= Default bridge
+= The default bridge
 + w a
-Each container gets its own network and a private IP on a bridge. On the default bridge, names do not resolve.
+When Docker is installed it creates a network called `bridge`. Containers started without `--network` join it and get a private address like `172.17.0.5`.
+On this default bridge, containers can reach each other only by IP address, not by name, and addresses change on every restart.
 = Your own network
 + br d
 ~ w>a http://api:3000 ;; a>d db:5432
 $ docker network create shopnet
-$ docker run -d --name api --network shopnet shop-api
-On a user-defined network containers find each other **by name**.
-= Publish
+$ docker run -d --name api --network shopnet shop-api:1.0
+$ docker run -d --name db --network shopnet -e POSTGRES_PASSWORD=dev postgres:18
+- network create shopnet = a user-defined bridge network
+- --network shopnet = attach the container to it
+On a **user-defined** network, Docker's built-in DNS answers container names. The web container reaches the API at `http://api:3000`, and the API reaches the database at `db:5432`, whatever their current addresses.
+= Publish to the outside
 + u h
 ~ u>h :8080 ;; h>w :80
-$ docker run -d -p 8080:80 --network shopnet web
-`-p host:container`. Only publish what outsiders need.
-= Inside localhost | PROBLEM
+$ docker run -d --name web --network shopnet -p 8080:80 web:1.0
+- -p 8080:80 = host port 8080 forwards to container port 80
+Publish only what users need, usually just the web front. The API and database stay reachable only inside `shopnet`.
+= localhost inside a container | PROBLEM
 ~ !a>w localhost
 * a
-Inside a container, `localhost` is that container. Use the other container's name.
-= Other drivers
+Inside a container, `localhost` means **that container itself**, not your computer and not the other containers. An API configured with `DB_HOST=localhost` finds no database. Use the other container's name instead.
+To reach a service running on the host from a container, Docker Desktop offers the name `host.docker.internal`.
+= Other network drivers
 * br
-`host` shares the host network. `none` has none. `overlay` spans hosts in Swarm. `macvlan` gives a LAN address.
-!! Published ports can bypass ufw rules. Bind to `127.0.0.1:8080:80` when only local access is needed.
+| Driver | Behaviour |
+| `bridge` | Private network on one host (default) |
+| `host` | The container uses the host's network directly; no isolation, no `-p` needed |
+| `none` | No network at all |
+| `overlay` | One network spanning several hosts (Docker Swarm) |
+| `macvlan` | The container gets its own address on your physical LAN |
+!! Ports published with `-p` can bypass ufw firewall rules on Linux. Bind to `127.0.0.1:8080:80` when only local access is needed.
 ? From `api`, how do you reach `db`? | localhost:5432 | *db:5432 | 127.0.0.1
+^ https://docs.docker.com/engine/network/ Docker: networking
 
 ## Many containers
 # dk-compose | Docker Compose | Intermediate | One file, one command, a whole system.
@@ -258,7 +370,7 @@ Z p 1 0 2 3 project: shop
 @ a box 2 0 api
 @ d db 2 1 db
 @ v bucket 2 2 pgdata
-= Describe it
+= Describe the system
 + y
 > services:
 >   web:
@@ -266,36 +378,67 @@ Z p 1 0 2 3 project: shop
 >     ports: ["8080:80"]
 >   api:
 >     build: ./api
+>     environment:
+>       DB_HOST: db
 >     depends_on:
 >       db: { condition: service_healthy }
-Services, networks and volumes in one file. The old `version:` line is obsolete.
+- services = one entry per container
+- build: ./web = build this service's image from `./web/Dockerfile`
+- ports: ["8080:80"] = publish, like `-p`
+- environment = variables for the container
+- depends_on … service_healthy = start `api` only after `db` reports healthy
+The old `version:` line at the top is obsolete and can be removed.
 = Start it
 + p w a d
 ~ y>w ;; y>a ;; y>d
-$ docker compose up -d
+$ docker compose up -d --build
+- up = create the network, volumes and containers, and start them
+- -d = in the background
+- --build = rebuild images whose Dockerfile or files changed
 $ docker compose ps
 $ docker compose logs -f api
-Compose makes a network; services reach each other by name.
-= Health
+- logs -f api = follow one service's logs
+$ docker compose exec db psql -U postgres
+- exec db psql … = run a command inside the running `db` service
+Compose names the project after the folder and creates a network for it, so services reach each other by service name.
+= Health checks
 : d ok healthy
 ~ d>a ready
 >   db:
 >     image: postgres:18
+>     environment:
+>       POSTGRES_PASSWORD: ${DB_PASSWORD}
 >     healthcheck:
 >       test: ["CMD-SHELL", "pg_isready -U postgres"]
-Plain `depends_on` waits for start. `service_healthy` waits until ready.
+>       interval: 5s
+>       retries: 10
+- healthcheck.test = a command Docker runs inside; exit 0 means healthy
+- interval / retries = how often to check, and how many failures before "unhealthy"
+- ${DB_PASSWORD} = taken from your shell or from a `.env` file next to compose.yaml
+Plain `depends_on: [db]` only waits until the container **started**, not until the database accepts connections.
 = Data and settings
 + v
 ~ d>v
-Declare volumes at the bottom. Put local settings in `.env` and keep it out of Git.
-= Develop
+>     volumes:
+>       - pgdata:/var/lib/postgresql
+> volumes:
+>   pgdata:
+- volumes (inside the service) = mount the named volume
+- volumes (at the bottom) = declare it, so Compose creates and keeps it
+Put local settings and passwords in `.env` and add `.env` to `.gitignore`.
+= Develop with watch and profiles
 ~ y>a watch
 $ docker compose watch
-Watch syncs files or rebuilds when code changes. **Profiles** start optional services.
+- watch = when you save a file, sync it into the running container or rebuild, as configured under `develop: watch:`
+$ docker compose --profile tools up -d
+- --profile tools = also start services marked `profiles: [tools]`, such as a database admin page you need only sometimes
+$ docker compose down
+- down = stop and remove containers and the network, keep volumes
 = Beyond one host
 * p
-Compose is for one machine: development, tests, small servers. For many machines use Kubernetes.
+Compose runs everything on **one** machine. It is ideal for development, automated tests in CI, and small single-server deployments. When you need many machines, automatic recovery and rolling updates across them, that is the job of Kubernetes.
 ? `depends_on` alone guarantees the database is... | healthy | *started | backed up
+^ https://docs.docker.com/compose/ Docker Compose documentation
 
 # dk-sec | Container security | Advanced | Least privilege at run time.
 @ i stack 0 0 Trusted image
@@ -306,27 +449,45 @@ Compose is for one machine: development, tests, small servers. For many machines
 = The risk | RISK
 + a c h
 ~ !a>c exploit ;; !c>h escape
-A break-in to a root container with extra powers can become a break-in to the host.
+An attacker finds a bug in your web app and can run commands inside its container. If that container runs as root with extra Linux powers and a writable file system, the next step, escaping to the host, becomes much easier. Every protection you add makes each step harder.
 = Do not run as root
-Run as an ordinary numeric user and make the filesystem read-only, with a small temporary folder where the app must write.
 + s
 * c
 : c ok uid 10001
-$ docker run --user 10001:10001 --read-only --tmpfs /tmp shop
-= Drop powers
+$ docker run --user 10001:10001 --read-only --tmpfs /tmp shop:1.0
+- --user 10001:10001 = run as this user ID and group ID instead of root
+- --read-only = the container's own file system cannot be changed
+- --tmpfs /tmp = except a small in-memory `/tmp`, for apps that need to write temporary files
+Better still, set `USER 10001` in the Dockerfile so it is the default.
+= Drop Linux capabilities
 ~ s>c
-$ docker run --cap-drop ALL --security-opt no-new-privileges shop
-Add back only what is needed, for example `NET_BIND_SERVICE`.
-!! `--privileged` removes almost all protection.
+Root's powers are split into **capabilities**, such as changing network settings or binding to ports below 1024. Containers get a default set. Take them all away and add back only what is needed:
+$ docker run --cap-drop ALL --cap-add NET_BIND_SERVICE --security-opt no-new-privileges shop:1.0
+- --cap-drop ALL = remove every capability
+- --cap-add NET_BIND_SERVICE = give back only the right to listen on ports below 1024
+- --security-opt no-new-privileges = programs inside cannot gain more privileges later (for example through setuid files)
+!! `--privileged` removes almost all protection and gives the container nearly full access to the host. Avoid it.
 = Limit resources
-Without limits one container can use all memory or start endless processes and take the host down with it.
 * s
-$ docker run --memory 512m --cpus 1.5 --pids-limit 200 shop
+$ docker run --memory 512m --cpus 1.5 --pids-limit 200 shop:1.0
+- --memory 512m = at most 512 MB of memory; going over gets the container killed (exit code 137), not the host
+- --cpus 1.5 = at most one and a half CPU cores
+- --pids-limit 200 = at most 200 processes, which stops a "fork bomb"
+Without limits, one misbehaving container can make every other container on the host slow or crash.
 = Trust the image
 + i
 ~ i>c verified
-Use official or verified publishers, pin digests, scan, verify signatures, keep an SBOM.
-= Rootless
+- Use **official** or **verified publisher** images, or your own approved base images.
+- Pin versions or digests.
+- **Scan** images in the pipeline and fail on serious findings.
+- **Verify signatures** before deploying.
+- Keep an **SBOM** (software bill of materials), a list of every package in the image, so you can answer "are we affected?" within minutes when a new vulnerability is announced.
+$ docker buildx build --sbom=true --provenance=true -t shop:1.0 .
+- --sbom=true / --provenance=true = attach an SBOM and a record of how the image was built
+= Rootless mode
 : h ok rootless
-Rootless mode runs the daemon itself without root. Then even an escape lands as an ordinary user.
+In **rootless mode**, the Docker daemon itself runs as an ordinary user. Even if an attacker escapes from a container, they land on the host as that unprivileged user, not as root.
+$ dockerd-rootless-setuptool.sh install
+- dockerd-rootless-setuptool.sh install = set up a rootless daemon for the current user
 ? What does --cap-drop ALL do? | Deletes the container | *Removes Linux capabilities | Drops the network
+^ https://docs.docker.com/engine/security/ Docker: security

@@ -11,28 +11,44 @@ Z r 0 0 3 2 Region
 @ app box 1 1 Your app
 = What cloud means
 + u
-Rent computing on demand by API, pay for what you use, give it back. **IaaS** machines, **PaaS** platforms, **SaaS** finished software.
-= Regions and zones
+**Cloud computing** means renting computing power, storage and services over the internet, on demand, through an API. You start things in minutes, pay for what you use, and give them back when done.
+| Model | You get | You manage | Example |
+| IaaS | Virtual machines, networks, disks | OS, runtime, app, data | EC2 |
+| PaaS | A platform that runs your code | App and data | Elastic Beanstalk, Lambda |
+| SaaS | Finished software | Only your data and users | Gmail, Jira Cloud |
+= Regions and Availability Zones
 + r a b c
-A **Region** is a geographic area. It holds several **Availability Zones**: separate data centres with own power, joined by fast links.
-= Survive a zone
+- A **Region** is a geographic area, such as Mumbai (`ap-south-1`) or Ireland (`eu-west-1`). Data stays in the Region you choose unless you move it.
+- Each Region has at least three **Availability Zones** (AZs): separate data centres, kilometres apart, with their own power, cooling and network, joined by fast private links.
+$ aws ec2 describe-availability-zones --region ap-south-1 --query "AvailabilityZones[].ZoneName"
+- describe-availability-zones = list the zones of a Region
+- --query = keep only the names
+Choose a Region by distance to users, legal rules for data, price, and which services it offers.
+= Survive a zone failure
 + app
 : b err down
 ~ u>a
 : a ok serving
 : c ok serving
-Run in at least two zones. A single-zone system fails with its zone.
-= Edge
+Zones fail rarely, but they do fail. A system running in only one zone goes down with it. Run at least two copies of everything important in different zones: instances in an Auto Scaling group spread over zones, databases with Multi-AZ, load balancers across zones.
+= Edge locations
 + e
 ~ u>e near ;; e>b miss
-CloudFront and Route 53 answer from locations near users.
+Besides Regions there are hundreds of **edge locations** in cities worldwide. CloudFront (content delivery) and Route 53 (DNS) answer users from the nearest one, and contact your Region only when needed.
 = Shared responsibility
 * app
-AWS secures the cloud: buildings, hardware, managed service software. You secure what is **in** it: data, access, configuration, guest OS on EC2.
-= Free plan
-For accounts opened since July 2025: up to $200 in credits, and a free plan that lasts 6 months or until credits run out. Set a budget alert on day one.
+Security is split:
+| AWS secures **of** the cloud | You secure what is **in** the cloud |
+| Buildings, hardware, network | Your data and who can access it |
+| The software of managed services | IAM users, roles and policies |
+| Physical access | Security groups and network design |
+| | The operating system and patches on EC2 |
+The more managed the service, the more AWS does: you patch an EC2 instance, AWS patches the engine under RDS or Lambda.
+= Free plan and first steps
+For accounts opened since July 2025: up to $200 in credits and a free plan that lasts 6 months or until the credits run out. On day one: MFA on root, a sign-in for yourself through Identity Center, and a budget alert.
 ? Who patches the OS on your EC2 instance? | AWS | *You | Nobody
 ^ https://aws.amazon.com/free/ AWS Free Tier
+^ https://aws.amazon.com/compliance/shared-responsibility-model/ Shared responsibility model
 
 # aws-iam | IAM: identities and permissions | Beginner | Users, roles, policies and how a request is judged.
 @ u user 0 0 Person
@@ -41,30 +57,57 @@ For accounts opened since July 2025: up to $200 in credits, and a free plan that
 @ ev gate 2 0 IAM check
 @ s bucket 3 0 S3 bucket
 @ ec server 0 1 EC2 app
-= Root | RISK
+= The root user | RISK
 + u
 : u err root
-The root user can do everything. Turn on MFA, make no access keys, use it almost never.
+The email that created the account is the **root user**. It can do everything, including closing the account, and policies cannot restrict it.
+- Turn on MFA for it.
+- Create no access keys for it.
+- Use it only for the few tasks that require it, such as changing the support plan.
 = Policies
-A policy is JSON: which actions, on which resources, under which conditions. It is attached to a user, group, role or resource.
 + p ev s
 ~ u>ev GetObject? ;; ev>p check ;; ev>s allow
-> { "Effect": "Allow", "Action": "s3:GetObject",
->   "Resource": "arn:aws:s3:::acme-logs/*" }
-= How it decides
+> {
+>   "Effect": "Allow",
+>   "Action": "s3:GetObject",
+>   "Resource": "arn:aws:s3:::acme-logs/*",
+>   "Condition": { "Bool": { "aws:MultiFactorAuthPresent": "true" } }
+> }
+- Effect = Allow or Deny
+- Action = `service:Operation`; wildcards like `s3:Get*` are possible but widen access
+- Resource = which resources, by ARN (`arn:aws:s3:::bucket/key`)
+- Condition = extra rules; here, only if the caller signed in with MFA
+Policies attach to identities (users, groups, roles) or to resources (a bucket policy, a KMS key policy).
+= How IAM decides
 * ev
-Everything is denied by default. An explicit **Allow** permits. An explicit **Deny** always wins.
-= Roles
+For every request IAM collects all policies that apply, then:
+- if any matching statement says **Deny**: refused (explicit deny always wins);
+- else if any says **Allow**: permitted;
+- else: refused (**implicit deny**, the default).
+In an Organization, **SCPs** (service control policies) set the outer limit for whole accounts; nothing inside can exceed them.
+= Roles and temporary credentials
 + ro ec
 ~ ec>ro assume ;; ro>ev temporary keys
-A role gives temporary credentials. Attach roles to EC2, Lambda or pods instead of storing access keys.
-= People
+A **role** has policies but no password or permanent keys. A trusted party **assumes** it and receives credentials that expire, usually within an hour:
+- an EC2 instance through an **instance profile**;
+- a Lambda function through its **execution role**;
+- a Kubernetes pod through **EKS Pod Identity**;
+- a GitHub Actions job through **OIDC**;
+- a person from another account.
+$ aws sts assume-role --role-arn arn:aws:iam::222233334444:role/ReadOnly --role-session-name ana
+- sts assume-role = ask for temporary credentials of a role
+- --role-session-name ana = a label that shows up in CloudTrail, so you can see who used it
+= People sign in through Identity Center
 ~ u>ro sign in
-Use IAM Identity Center with your company login. Avoid long-lived IAM user keys.
+**IAM Identity Center** connects AWS to your company's login (Microsoft Entra ID, Okta, Google). People choose an account and a **permission set** and get temporary credentials, in the console and the CLI (`aws sso login`). When someone leaves the company, disabling their company login removes all AWS access.
+Avoid IAM users with long-lived access keys for people.
 = Least privilege | PRACTICE
 * p
-Start narrow. IAM Access Analyzer can suggest policies from real use. Organizations add **SCPs** as guardrails across accounts.
+Start with narrow permissions and add what is missing, rather than starting with `AdministratorAccess` and trying to remove later.
+$ aws accessanalyzer start-policy-generation --policy-generation-details principalArn=arn:aws:iam::111122223333:role/app
+- start-policy-generation = IAM Access Analyzer reads CloudTrail and proposes a policy with only the actions the role really used
 ? Allow and Deny both match. Result? | Allow | *Deny | Depends on order
+^ https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html Policy evaluation logic
 
 # aws-vpc | VPC networking | Intermediate | Subnets, routes, gateways and firewalls.
 Z v 1 0 3 2 VPC 10.0.0.0/16
@@ -76,27 +119,49 @@ Z v 1 0 3 2 VPC 10.0.0.0/16
 @ db db 3 1 DB (private)
 = A private network
 + v
-A VPC is your own network in a Region. Split it into subnets; each subnet lives in one zone.
+A **VPC** is your own isolated network in one Region, with a private address range in CIDR notation:
+- `10.0.0.0/16` = the first 16 bits fixed, 65,536 addresses for the whole VPC;
+- `10.0.1.0/24` = one subnet of 256 addresses (AWS reserves 5 in each).
+Each **subnet** lives in exactly one Availability Zone. A typical layout has, per zone, one public and one private subnet.
 = Public subnet
 + i gw lb
 ~ i>gw ;; gw>lb
-A subnet is public when its route table sends `0.0.0.0/0` to an **internet gateway**.
+A subnet is **public** because of its **route table**, not its name:
+> Destination    Target
+> 10.0.0.0/16    local
+> 0.0.0.0/0      igw-0def
+- 10.0.0.0/16 → local = traffic inside the VPC stays inside (always present)
+- 0.0.0.0/0 → igw-… = everything else goes to the internet gateway
+Load balancers and NAT gateways go here. Resources need a public IP to be reachable.
 = Private subnet
 + app db
 ~ lb>app ;; app>db
-Apps and databases have no route from the internet.
-= Going out
+A **private** subnet's route table has no route to the internet gateway. Nothing on the internet can start a connection to it. Application servers and databases live here; the load balancer in the public subnet forwards requests to them.
+= Going out: NAT gateway and endpoints
 + nat
 ~ app>nat updates ;; nat>gw
-A NAT gateway lets private machines start connections out. It costs per hour and per GB; a gateway endpoint for S3 avoids much of it.
-= Security groups and NACLs
+Private servers still need to reach out, for example to download updates. A **NAT gateway** in a public subnet lets them start outgoing connections while staying unreachable from outside. Their route table has `0.0.0.0/0 → nat-…`.
+NAT gateways cost per hour and per GB processed. **VPC endpoints** give private access to AWS services: a free **gateway endpoint** for S3 and DynamoDB keeps that traffic off the NAT gateway entirely.
+= Security groups and network ACLs
 * app db
 : db ok from app only
-**Security groups** are stateful, allow-only, on the interface. **Network ACLs** are stateless, on the subnet, with allow and deny.
+| | Security group | Network ACL |
+| Attached to | A network interface (instance, database, load balancer) | A subnet |
+| Rules | Allow only | Allow and deny, numbered, evaluated in order |
+| State | Stateful: replies allowed automatically | Stateless: replies need their own rule |
+| Typical use | Main firewall | Extra coarse blocking |
+$ aws ec2 describe-route-tables --filters Name=vpc-id,Values=vpc-0abc --query "RouteTables[].Routes"
+- describe-route-tables = see every route; the quickest way to explain "why can't this reach the internet?"
 = Connecting networks
 * v
-Peering (two VPCs), Transit Gateway (many), PrivateLink (one service privately), VPN or Direct Connect (your office).
+| Need | Service |
+| Two VPCs talk privately | VPC peering |
+| Many VPCs and accounts | Transit Gateway |
+| Expose one service privately to other VPCs | PrivateLink |
+| Your office or data centre | Site-to-Site VPN, or Direct Connect (a dedicated line) |
+**VPC Flow Logs** record accepted and rejected connections, for troubleshooting and audits.
 ? What makes a subnet public? | Its name | *A route to an internet gateway | A security group
+^ https://docs.aws.amazon.com/vpc/latest/userguide/how-it-works.html How Amazon VPC works
 
 ## Core services
 # aws-ec2 | EC2, load balancing, auto scaling | Beginner | Servers that come and go with demand.
@@ -108,24 +173,39 @@ Peering (two VPCs), Transit Gateway (many), PrivateLink (one service privately),
 @ cw gauge 3 1 CloudWatch
 = An instance
 + a
-Choose an **AMI** (disk image), **instance type** such as `t4g.small`, subnet, security group and IAM role. User data runs at first boot.
-= Connect
+To start an EC2 instance you choose: an **AMI** (starting disk image), an **instance type** (size: `t4g.small`, `m7i.large`), a **subnet** (and so a zone), a **security group**, an **IAM role**, and optional **user data**, a script run at first boot:
+> #!/bin/bash
+> dnf install -y nginx
+> systemctl enable --now nginx
+- #!/bin/bash = run with Bash
+- dnf install -y nginx = install nginx on Amazon Linux without asking
+- systemctl enable --now nginx = start it now and at every boot
+= Connect without SSH
 * a
-Session Manager gives a shell with no open SSH port and records it.
+$ aws ssm start-session --target i-0abc123
+- ssm start-session = open a shell through Systems Manager Session Manager
+No inbound port 22 is needed, no SSH keys to manage, and every session can be logged to S3 or CloudWatch. The instance needs the SSM agent (included in Amazon Linux and Ubuntu AMIs) and a role with the `AmazonSSMManagedInstanceCore` policy.
 = Load balancer
 + u lb b
 ~ u>lb ;; lb>a ;; lb>b
-**ALB** works with HTTP paths and hosts. **NLB** with TCP and UDP at very high rates. Health checks remove bad targets.
+An **Application Load Balancer** receives HTTPS on port 443, ends TLS with a free ACM certificate, and forwards to a **target group** of instances. It calls each instance's health check path and stops sending traffic to failing ones. **NLB** is for TCP/UDP at very high rates and static IPs.
 = Auto Scaling
 + asg cw
 ~ cw>asg CPU 80% ;; asg>b add
-Keeps the group between min and max and replaces unhealthy instances. Target tracking: "keep CPU near 50%".
-= Paying
-On-Demand is flexible. Savings Plans commit for a discount. **Spot** is far cheaper and can be taken back with two minutes' notice.
-= Lambda or EC2?
+An **Auto Scaling group** keeps the number of instances between min and max, spreads them across zones, replaces unhealthy ones, and registers new ones with the target group. A **target tracking** policy such as "average CPU 50%" adds instances when CPU rises and removes them when it falls.
+$ aws autoscaling set-desired-capacity --auto-scaling-group-name web --desired-capacity 6
+- set-desired-capacity = change the current number by hand, for example before a known event
+= Paying for compute
+| Option | Discount | Catch |
+| On-Demand | None | Most flexible |
+| Savings Plans | Up to about 70% | Commit to a spend per hour for 1 or 3 years |
+| Spot | Up to about 90% | AWS can take it back with two minutes' notice |
+Spot suits work that can be interrupted: batch jobs, CI runners, stateless workers in an Auto Scaling group with mixed instance types.
+= EC2 or something more managed?
 * a
-Before running servers, ask whether a managed service fits.
+Before running servers, ask whether a managed service fits better: Lambda for event-driven code, Fargate for containers, RDS for databases. Every EC2 instance is an operating system you must patch, monitor and secure.
 ? Spot instances can be... | never stopped | *reclaimed on short notice | only for databases
+^ https://docs.aws.amazon.com/ec2/ EC2 documentation
 
 # aws-store | S3, EBS and EFS | Beginner | Object, block and file storage.
 @ app server 0 0 App
@@ -133,28 +213,42 @@ Before running servers, ask whether a managed service fits.
 @ ebs db 1 1 EBS
 @ efs folder 0 1 EFS
 @ gl box 2 0 Glacier classes
-= S3
+= S3: object storage
 + app s3
 ~ app>s3 PUT
-Objects in buckets, reached by HTTP. Designed for 99.999999999% durability.
+**S3** stores objects in buckets and is reached over HTTPS with API calls (PUT, GET, DELETE), not mounted like a disk. It scales without limit and is designed for 99.999999999% durability.
 $ aws s3 cp report.pdf s3://acme-docs/2026/
-= EBS
+- s3 cp = upload; `s3://bucket/prefix/` is the destination
+$ aws s3 ls s3://acme-docs/2026/
+- s3 ls = list what is under that prefix
+= EBS: block storage
 + ebs
 ~ app>ebs disk
-A network disk for an instance, in one zone. Snapshots are stored regionally.
-= EFS
+**EBS** volumes are network disks attached to one instance, in one zone. The operating system formats and mounts them like a local disk. **Snapshots** copy a volume incrementally and are stored at Region level, so they can recreate the disk in any zone.
+$ lsblk
+- lsblk = on the instance, list attached disks, such as `nvme1n1`
+= EFS: file storage
 + efs
 ~ app>efs share
-A Linux file system many instances mount together.
-= Life cycle
+**EFS** is an NFS file system that many Linux instances in several zones mount at the same time. It grows and shrinks automatically, and you pay for what is stored. **FSx** offers Windows file shares and high-performance file systems.
+= Life cycle rules
 + gl
 ~ s3>gl after 90 days
-Rules move old objects to cheaper classes or delete them. Cheaper classes can have retrieval fees and delays.
+> Rule: logs/   after 30 days → Standard-IA   after 90 days → Glacier Flexible Retrieval   after 365 days → delete
+- logs/ = applies to objects under this prefix
+- Standard-IA = cheaper storage, small fee per retrieval
+- Glacier Flexible Retrieval = archive; retrieval takes minutes to hours
+- delete = remove objects automatically when no longer needed
+Cheaper classes have retrieval fees, minimum storage durations and sometimes delays, so they suit data you rarely read.
 = Keep it private | RISK
 * s3
 : s3 ok blocked public
-Block Public Access is on for new buckets. Share with pre-signed URLs or CloudFront. Versioning and Object Lock protect against deletion.
+New buckets have **Block Public Access** on. Keep it on.
+- Share single files with **presigned URLs** that expire.
+- Serve websites through **CloudFront** with Origin Access Control.
+- Turn on **versioning**, and **Object Lock** for data that must not be deleted (backups, audit logs), so even ransomware with stolen credentials cannot erase it.
 ? Disk for one database server? | S3 | *EBS | Glacier
+^ https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html S3 storage classes
 
 # aws-db | Databases and messaging | Intermediate | RDS, DynamoDB, cache, queues and events.
 @ app server 0 1 App
@@ -166,25 +260,37 @@ Block Public Access is on for new buckets. Share with pre-signed URLs or CloudFr
 = RDS and Aurora
 + app rds
 ~ app>rds SQL
-Managed PostgreSQL, MySQL and others: patching, backups, point-in-time restore.
-= Multi-AZ
+**RDS** runs relational databases (PostgreSQL, MySQL, MariaDB, Oracle, SQL Server, Db2) and handles installation, patching, backups and failover. **Aurora** is AWS's MySQL- and PostgreSQL-compatible engine with storage replicated six ways across three zones.
+Applications connect with a normal database driver to an **endpoint** name, such as `shop-db.abc123.ap-south-1.rds.amazonaws.com:5432`.
+= Multi-AZ and read replicas
 + sb
 ~ rds>sb copy
 : rds err failed
 : sb ok promoted
-A standby in another zone takes over. **Read replicas** are for scaling reads, a different purpose.
+- **Multi-AZ**: a synchronous standby in another zone. If the primary fails, RDS promotes the standby and points the same endpoint at it, usually within one or two minutes. It is for **availability**; the standby does not serve queries.
+- **Read replicas**: asynchronous copies that **do** serve read-only queries, to spread reporting load. They can be in other Regions.
+$ aws rds reboot-db-instance --db-instance-identifier shop-db --force-failover
+- --force-failover = reboot by switching to the standby; a safe way to test failover before you need it
 = DynamoDB
 + dy
 ~ app>dy key
-Key-value at any scale. Design the partition key around your queries.
-= SQS and SNS
+**DynamoDB** stores items by key with millisecond latency at any scale. On-demand mode bills per request with no capacity planning. Choose the **partition key** from your access patterns ("get cart by userId"), because queries by other attributes need indexes.
+$ aws dynamodb query --table-name orders --key-condition-expression "userId = :u" --expression-attribute-values '{":u":{"S":"u42"}}'
+- query = read all items with this partition key, efficiently
+- --key-condition-expression = the condition on the key; `:u` is a placeholder
+- --expression-attribute-values = the placeholder's value and type
+= Queues, topics and events
 + q w
 ~ app>q order ;; q>w pull
-**SQS** holds messages until processed; failures go to a dead-letter queue. **SNS** pushes to many. **EventBridge** routes by rules.
+- **SQS** holds messages until a worker processes and deletes them; failed messages go to a dead-letter queue after a set number of tries.
+- **SNS** pushes one message to many subscribers: queues, functions, email, HTTP.
+- **EventBridge** routes events by rules, including events from AWS services ("an EC2 instance stopped") and schedules.
+A common pattern: the shop publishes "order placed" to SNS; separate SQS queues for email, stock and invoices each receive a copy and are processed independently.
 = At least once | PRACTICE
 * w
-Standard queues may deliver twice. Make workers idempotent.
+Standard SQS queues deliver each message **at least once**: occasionally twice. Workers must be **idempotent**: processing the same message twice gives the same result as once. For example, store the order ID of each sent email and skip ones already sent.
 ? Multi-AZ standby is mainly for... | faster reads | *availability | cheaper storage
+^ https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html RDS Multi-AZ
 
 ## Building on AWS
 # aws-cont | Containers: ECR, ECS, EKS | Intermediate | Three ways to run images.
@@ -194,24 +300,39 @@ Standard queues may deliver twice. Make workers idempotent.
 @ eks pod 2 1 EKS
 @ f cloud 3 0 Fargate
 @ n server 3 1 EC2 nodes
-= ECR
+= ECR: the registry
 + ci ecr
 ~ ci>ecr push
-A private image registry with scanning and life cycle rules.
+**ECR** is a private image registry. CI logs in with temporary credentials, pushes images, and ECR scans them for vulnerabilities. **Lifecycle policies** delete old images automatically:
+> Keep the last 30 images tagged "release-*"; expire untagged images after 7 days.
+$ aws ecr describe-image-scan-findings --repository-name shop --image-id imageTag=1.8.2
+- describe-image-scan-findings = the vulnerabilities found in one image
 = ECS
 + ecs
 ~ ecr>ecs
-Amazon's own orchestrator. **Task definition** (what), **task** (running copy), **service** (keep N running).
+**ECS** is AWS's own container orchestrator, simpler than Kubernetes.
+- A **task definition** describes containers: image, CPU, memory, ports, environment variables, secrets, logging, and the task's IAM role.
+- A **service** keeps N tasks running, replaces failed ones, does rolling or blue-green deployments, and registers tasks with a load balancer.
+$ aws ecs register-task-definition --cli-input-json file://taskdef.json
+- register-task-definition = save a new revision of the task definition
+$ aws ecs update-service --cluster prod --service shop --task-definition shop:42
+- update-service --task-definition shop:42 = roll the service out to revision 42
 = Fargate
 + f
 ~ ecs>f run
-No servers to manage: pay per task CPU and memory.
+With **Fargate**, each task runs in its own isolated micro-VM managed by AWS. No EC2 instances to choose, patch or scale; you pay for the vCPU and memory each task requests, per second. ECS on EC2 is cheaper at large, steady scale; Fargate is simpler.
 = EKS
 + eks n
 ~ ecr>eks ;; eks>n
-Managed Kubernetes control plane. Nodes by managed groups, Karpenter, Auto Mode or Fargate. Give pods AWS access with Pod Identity.
-= Which? | PRACTICE
-Want simple: ECS on Fargate. Need Kubernetes tooling: EKS. App Runner stopped taking new customers on 30 April 2026; AWS points to **ECS Express Mode**.
+**EKS** runs a managed Kubernetes control plane. Worker capacity can be managed node groups, **Karpenter** (adds right-sized nodes on demand), **EKS Auto Mode** (AWS manages nodes and core add-ons) or Fargate. Pods get AWS permissions through **EKS Pod Identity**, so no keys are stored in the cluster.
+$ aws eks update-kubeconfig --name prod --region ap-south-1
+- update-kubeconfig = add the cluster to your `~/.kube/config`, so `kubectl` can reach it
+= Which one? | PRACTICE
+| Situation | Good choice |
+| A few services, small team, want simple | ECS on Fargate |
+| Many teams, Kubernetes skills, Helm and Argo CD | EKS |
+| One web app with as little setup as possible | ECS Express Mode |
+App Runner stopped taking new customers on 30 April 2026; AWS points to **ECS Express Mode** instead.
 ? Runs tasks without managing servers? | ECR | *Fargate | EC2
 ^ https://docs.aws.amazon.com/apprunner/latest/dg/apprunner-availability-change.html App Runner availability change
 
@@ -225,24 +346,36 @@ Want simple: ECS on Fargate. Need Kubernetes tooling: EKS. App Runner stopped ta
 = No servers to run
 + u g l d
 ~ u>g ;; g>l ;; l>d
-Code runs on a request and you pay per use. Nothing runs when nobody calls.
+In a **serverless** design, an HTTP request arrives at **API Gateway**, which calls a **Lambda** function, which reads and writes **DynamoDB**. Every piece scales by itself and is billed per request; when nobody calls, the cost is close to zero. There are no operating systems to patch.
 = Scaling
 + l2
 ~ g>l ;; g>l2
-Each concurrent request gets its own environment.
-= Cold start
+Each concurrent request gets its own execution environment. A hundred simultaneous requests run in a hundred environments. Each account has a **concurrency** limit per Region (1,000 by default, can be raised).
+$ aws lambda put-function-concurrency --function-name orders --reserved-concurrent-executions 100
+- reserved-concurrent-executions 100 = this function may use at most 100, and those 100 are always available to it, so it cannot starve others or be starved
+= Cold starts
 : l2 warn cold
-A new environment takes time to start. Smaller packages help; provisioned concurrency removes it for a price.
-= Limits
+A new environment must download your code and start the runtime: a **cold start**, from tens of milliseconds to a second or more for large Java packages. Later requests reuse the warm environment.
+- Keep packages small and load only what you need.
+- **Provisioned concurrency** keeps environments warm, for a price.
+- **SnapStart** (Java, Python, .NET) restores from a snapshot of an initialised environment.
+= Limits and settings
 * l
-Up to 15 minutes per run and 10 GB memory. Set timeouts and reserved concurrency so one function cannot use the whole account's share.
-= Workflows
+| Setting | Limit | Advice |
+| Timeout | Up to 15 minutes | Set just above the normal run time |
+| Memory | 128 MB to 10 GB | More memory also gives more CPU; test which is cheapest |
+| Payload | 6 MB request/response | Put large files in S3 and pass the key |
+= Workflows with Step Functions
 + s
 ~ s>l step 1 ;; s>l2 step 2
-Step Functions coordinates with retries and waiting.
-= Deploy
-AWS SAM, CDK or Terraform; shift traffic gradually with aliases.
+**Step Functions** coordinates several steps as a state machine: call function A, then B; retry B three times with back-off; wait for a human approval; run steps in parallel; catch errors. Each step is visible in a diagram with its input and output, which makes long processes like "order → payment → shipping" easy to follow and debug.
+= Deploy safely
+Use **AWS SAM**, **CDK** or Terraform to define functions, APIs and permissions as code.
+$ sam deploy --guided
+- sam deploy --guided = package and deploy a SAM application, asking for settings the first time
+Use **aliases** and **traffic shifting**: send 10% of calls to the new version for ten minutes, and roll back automatically if a CloudWatch alarm fires.
 ? Longest single Lambda run? | 5 min | *15 min | 1 hour
+^ https://docs.aws.amazon.com/lambda/latest/dg/lambda-concurrency.html Lambda concurrency
 
 # aws-ops | Monitoring, security and cost | Advanced | Operating an account well.
 @ app server 0 0 Workload
@@ -251,24 +384,45 @@ AWS SAM, CDK or Terraform; shift traffic gradually with aliases.
 @ gd shield 2 1 GuardDuty
 @ c board 2 0 Cost Explorer
 @ al flag 3 0 Alarm
-= Metrics and logs
+= Metrics, logs and alarms
 + app cw al
 ~ app>cw ;; cw>al
-CloudWatch collects metrics and logs and raises alarms. Set log retention, or logs stay forever.
+**CloudWatch** collects metrics from every service, logs from applications, and traces. Alarms notify through SNS or act directly (scale, reboot).
+$ aws logs put-retention-policy --log-group-name /ecs/shop --retention-in-days 30
+- put-retention-policy = delete log entries older than 30 days
+!! Log groups keep data **forever** by default, and you pay for every gigabyte stored. Set retention on every log group.
 = Who did it
 + ct
 ~ app>ct API calls
-CloudTrail records API activity. Send it to a separate, locked account.
-= Detect
+**CloudTrail** records every API call in the account. An **organisation trail** sends records from all accounts to a separate, locked log-archive account, with S3 Object Lock, so an attacker who gets into one account cannot delete the evidence.
+= Detect threats and drift
 + gd
 ~ ct>gd
-GuardDuty looks for threats. Security Hub gathers findings. Config tracks resource changes.
+| Service | Does |
+| GuardDuty | Finds threats from CloudTrail, VPC flow and DNS logs: crypto mining, credential misuse, contact with known bad addresses |
+| Security Hub | Gathers findings from many services and checks against standards such as CIS |
+| AWS Config | Records every resource change and checks rules ("all EBS volumes encrypted") |
+| Inspector | Scans EC2, ECR images and Lambda for vulnerabilities |
+$ aws guardduty list-detectors
+- list-detectors = whether GuardDuty is on in this Region (empty means off)
 = Cost
 + c
 : c warn NAT + idle
-Tag everything. Budgets and anomaly detection warn early. Usual waste: idle instances, unattached disks, NAT traffic, old snapshots.
-= Well-Architected | PRACTICE
-Six pillars: operational excellence, security, reliability, performance efficiency, cost optimisation, sustainability.
-= Infrastructure as code
-CloudFormation and **CDK** are AWS's own; Terraform works across providers. CodePipeline, CodeBuild and CodeDeploy form AWS's CI/CD. CodeCommit returned to general availability after a pause.
+- **Tag** everything with team and project, and turn the tags on for cost allocation.
+- **Budgets** and **Cost Anomaly Detection** warn early.
+- Usual waste: idle or oversized instances, unattached EBS volumes, old snapshots, idle load balancers, NAT gateway data, logs without retention.
+- **Compute Optimizer** suggests right-sized instances from real usage.
+= The Well-Architected Framework | PRACTICE
+AWS's checklist for good systems has six **pillars**:
+| Pillar | Key question |
+| Operational excellence | Can we run, observe and improve it? |
+| Security | Is access minimal, data protected, activity traced? |
+| Reliability | Does it recover from failures and scale with demand? |
+| Performance efficiency | Do we use the right resources in the right way? |
+| Cost optimisation | Do we pay only for what we need? |
+| Sustainability | Do we minimise the environmental impact? |
+The free **Well-Architected Tool** in the console walks a team through these questions for a workload.
+= Infrastructure as code and delivery
+CloudFormation and **CDK** are AWS's own infrastructure-as-code tools; Terraform works across providers. **CodePipeline**, **CodeBuild** and **CodeDeploy** form AWS's own CI/CD; CodeCommit returned to general availability after a pause. Many teams combine GitHub Actions (with OIDC) and Terraform instead.
 ? Which service records API calls? | CloudWatch | *CloudTrail | GuardDuty
+^ https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html AWS Well-Architected Framework

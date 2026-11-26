@@ -54,67 +54,259 @@ IBM completes its purchase of HashiCorp.
 ? OpenTofu is... | a cloud | *an open source fork of Terraform | a language
 
 ## Parts of Terraform
+# c-tfinstall | Install Terraform and read HCL | Beginner | The tool, the language and the files of a project.
+@@ user You ; gear Terraform ; doc .tf files ; cloud Cloud
+= Without it | PROBLEM
+Without the `terraform` program you cannot turn `.tf` files into real infrastructure, and without knowing how the files are written, a Terraform project looks like a wall of braces.
+= What it is | SOLUTION
+**Terraform** is a single program. It reads files ending in `.tf`, written in **HCL** (HashiCorp Configuration Language), and talks to cloud APIs through **providers**.
+All `.tf` files in one folder are read together as one configuration; the file names are only for people.
+| File (by convention) | Holds |
+| `main.tf` | Resources |
+| `variables.tf` | Input variables |
+| `outputs.tf` | Outputs |
+| `versions.tf` | Required Terraform and provider versions |
+| `terraform.tfvars` | Values for the variables |
+= Install
+$ winget install Hashicorp.Terraform
+- winget install = Windows package manager
+$ brew install hashicorp/tap/terraform
+- brew install hashicorp/tap/terraform = macOS, from HashiCorp's own tap
+On Ubuntu, add HashiCorp's apt repository as described on developer.hashicorp.com, then `sudo apt install terraform`.
+$ terraform -version
+- -version = print the installed version
+OpenTofu, the open-source fork, installs as `tofu` and accepts the same commands.
+= How HCL is written
+> resource "aws_s3_bucket" "logs" {
+>   bucket = "acme-logs-prod"
+>   tags = {
+>     Team = "platform"
+>   }
+> }
+- resource = the block type: something Terraform creates and manages
+- "aws_s3_bucket" = the resource type: provider `aws`, kind `s3_bucket`
+- "logs" = your local name for it, used to refer to it elsewhere
+- bucket = "…" = an argument: name, equals sign, value
+- tags = { … } = a map of keys and values
+Other block types: `variable`, `output`, `locals`, `data`, `module`, `provider`, `terraform`.
+= References and expressions
+> resource "aws_s3_bucket_versioning" "logs" {
+>   bucket = aws_s3_bucket.logs.id
+>   versioning_configuration { status = "Enabled" }
+> }
+- aws_s3_bucket.logs.id = "the `id` attribute of the bucket named logs"
+Because this block refers to the bucket, Terraform knows to create the bucket first. You never write the order yourself.
+Strings can include values: `"acme-${var.env}-logs"` becomes `acme-prod-logs`.
+= Format and check
+$ terraform fmt
+- fmt = rewrite files in the standard layout (indentation, alignment)
+$ terraform validate
+- validate = check syntax and references without contacting the cloud
+= Real-time example | PRACTICE
+A new team member opens the platform repository. Because every project uses the same file names, she finds the variables in `variables.tf` and the results in `outputs.tf` within a minute, and `terraform fmt` in CI keeps everyone's code looking the same.
+? In `resource "aws_s3_bucket" "logs"`, what is "logs"? | The bucket name in AWS | *Terraform's local name for the block | The provider
+^ https://developer.hashicorp.com/terraform/language/syntax/configuration Terraform: configuration syntax
+
 # c-prov | Provider | Beginner | The translator to each service.
 @@ doc Your files ; gear Provider ; cloud Service API ; bucket Registry
 = Without it | PROBLEM
-You would write different API code for every service.
+Every cloud and service has its own API. Without a common layer you would need different code and tools for AWS, Azure, GitHub and your DNS provider.
 = What it is | SOLUTION
-A plugin that knows one service: aws, azurerm, google, kubernetes, github.
-= How it works
+A **provider** is a plugin that teaches Terraform one service's API: how to create, read, update and delete its resources. There are thousands in the **Terraform Registry**: `aws`, `azurerm`, `google`, `kubernetes`, `helm`, `github`, `cloudflare`, `datadog`…
+= Declare and configure
 > terraform {
->   required_providers { aws = { source = "hashicorp/aws", version = "~> 6.0" } }
+>   required_version = ">= 1.10"
+>   required_providers {
+>     aws = { source = "hashicorp/aws", version = "~> 6.0" }
+>   }
 > }
-`terraform init` downloads it.
+> provider "aws" {
+>   region = "ap-south-1"
+> }
+- required_version = which Terraform versions may run this code
+- source = "hashicorp/aws" = where to download the provider from the registry
+- version = "~> 6.0" = any 6.x version, but not 7.0 (the "pessimistic" operator)
+- provider "aws" { region = … } = settings for the provider, here the AWS region
+Credentials are **not** written here: the AWS provider reads them from your environment, AWS profile or the CI role.
+= Download it
+$ terraform init
+- init = download the providers into `.terraform/` and record the exact versions in `.terraform.lock.hcl`
+Commit `.terraform.lock.hcl` so everyone, and CI, uses the same provider versions. Do not commit the `.terraform/` folder.
+$ terraform init -upgrade
+- -upgrade = allow newer provider versions within your constraints and update the lock file
+= Several regions or accounts
+> provider "aws" {
+>   alias  = "us"
+>   region = "us-east-1"
+> }
+> resource "aws_acm_certificate" "cdn" {
+>   provider = aws.us
+> }
+- alias = "us" = a second configuration of the same provider
+- provider = aws.us = this resource uses that configuration
 = Real-time example | PRACTICE
-One project makes the AWS network, the GitHub repository and the DNS record together.
+One Terraform project creates the AWS network, a GitHub repository with branch rules, and a Cloudflare DNS record pointing at the new load balancer. Three providers, one plan, one review.
 ? init downloads... | state | *providers | servers
+^ https://registry.terraform.io/ Terraform Registry
 
 # c-res | Resource and data source | Beginner | Things to make, and things to look up.
 @@ user Engineer ; box Resource ; cloud Cloud ; card Data source
 = Without it | PROBLEM
-A wiki page says which servers should exist. It is wrong.
+A wiki page lists which servers and buckets should exist. It is out of date the day after it is written, and nothing enforces it.
 = What it is | SOLUTION
-A **resource** block describes one thing to manage. A **data** block reads something that exists.
-= How it works
-> resource "aws_s3_bucket" "docs" { bucket = "acme-docs" }
-Others refer to it as `aws_s3_bucket.docs.id`, and Terraform works out the order.
+- A **resource** block describes one piece of infrastructure Terraform creates and manages: a server, a bucket, a DNS record. If the block is removed, Terraform deletes the real thing.
+- A **data** block (data source) only **reads** something that already exists, managed elsewhere, so you can use its details.
+= A resource
+> resource "aws_instance" "web" {
+>   ami           = data.aws_ami.ubuntu.id
+>   instance_type = "t3.small"
+>   tags          = { Name = "web-1" }
+> }
+- aws_instance = an EC2 virtual server
+- ami = the machine image to start from, taken from the data source below
+- instance_type = "t3.small" = the size
+After creation, Terraform knows attributes such as `aws_instance.web.public_ip`.
+= A data source
+> data "aws_ami" "ubuntu" {
+>   most_recent = true
+>   owners      = ["099720109477"]
+>   filter {
+>     name   = "name"
+>     values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
+>   }
+> }
+- data "aws_ami" "ubuntu" = look up a machine image; refer to it as `data.aws_ami.ubuntu`
+- most_recent = true = take the newest match
+- owners = only images published by this account (Canonical, the makers of Ubuntu)
+- filter = match the image name with a pattern
+= Lifecycle rules
+> lifecycle {
+>   prevent_destroy       = true
+>   create_before_destroy = true
+>   ignore_changes        = [tags["LastBackup"]]
+> }
+- prevent_destroy = refuse any plan that would delete this resource (for databases)
+- create_before_destroy = when a replacement is needed, create the new one first
+- ignore_changes = do not fight changes another tool makes to these attributes
 = Real-time example | PRACTICE
-A `data` block finds the newest system image, so new servers always start patched.
+A team's `data "aws_ami"` block always finds the newest Ubuntu image. Every time they rebuild servers, the new ones start from the latest patched image, without anyone looking up image IDs by hand.
 ? data blocks... | create | *read | delete
+^ https://developer.hashicorp.com/terraform/language/resources Terraform: resources
 
 # c-var | Variable, output, local | Beginner | Making files reusable.
 @@ user Engineer ; card Variables ; folder Files ; doc Outputs
 = Without them | PROBLEM
-Two copies of everything: one with "test", one with "prod".
+Test and production need the same infrastructure with different sizes and names. Without inputs you would keep two copies of every file, and they would drift apart.
 = What they are | SOLUTION
-**Variables** are inputs, **outputs** are results, **locals** are named values inside.
-= How it works
-Values come from a file, the command line, the environment or a default. Types and validation catch mistakes early.
-$ terraform apply -var-file=prod.tfvars
+- **Variables** are inputs: values given from outside, like function parameters.
+- **Outputs** are results: values printed after apply and readable by other code.
+- **Locals** are named values computed inside, to avoid repeating an expression.
+= Variables
+> variable "instance_type" {
+>   type        = string
+>   default     = "t3.small"
+>   description = "Size of the web servers"
+> }
+> variable "env" {
+>   type = string
+>   validation {
+>     condition     = contains(["dev", "prod"], var.env)
+>     error_message = "env must be dev or prod."
+>   }
+> }
+- type = string, number, bool, list(string), map(string), object({…})
+- default = used if no value is given; without it the variable is required
+- validation = a rule checked during plan, with a clear error
+Use them as `var.instance_type`.
+= Give values
+> # prod.tfvars
+> env           = "prod"
+> instance_type = "m7i.large"
+$ terraform plan -var-file=prod.tfvars
+- -var-file=prod.tfvars = read variable values from this file
+$ terraform plan -var="env=dev"
+- -var = one value on the command line
+Environment variables also work: `TF_VAR_env=dev`. A file named `terraform.tfvars` is loaded automatically.
+= Outputs and locals
+> locals {
+>   name = "shop-${var.env}"
+> }
+> output "web_ip" {
+>   value = aws_instance.web.public_ip
+> }
+- locals { name = … } = use it as `local.name`
+- output "web_ip" = printed after apply; read it with `terraform output web_ip`
+Mark secret outputs with `sensitive = true`, so they are hidden in the console.
 = Real-time example | PRACTICE
-One set of files, three var files: small servers in test, large in production.
+One set of `.tf` files and three var files: `dev.tfvars` with small, cheap servers, `staging.tfvars`, and `prod.tfvars` with large servers in three zones. A fix to the code reaches all three environments, and the differences are visible in three short files.
 ? Results are given by... | variables | *outputs | providers
+^ https://developer.hashicorp.com/terraform/language/values Terraform: variables and outputs
 
 # c-state | State | Beginner | Terraform's memory.
 @@ gear Terraform ; db State ; cloud Real things ; key Lock
 = Without it | PROBLEM
-Terraform would not know which server is yours, and would make a second one.
+Your file says "one server called web". In the cloud there are 40 servers. Which one is yours? Without a record, Terraform would create a second one on every run.
 = What it is | SOLUTION
-A file that links each block to the real resource.
-= How it works
-Keep it in shared, encrypted storage with **locking**, so two people cannot apply at once.
+The **state** is a JSON file in which Terraform records, for every block, the real resource it created: `aws_instance.web` is `i-0abc123`, with its current attributes. On every plan, Terraform compares three things: your files, the state, and the real cloud.
+= Local and remote state
+By default state is written to `terraform.tfstate` in the project folder. That is fine for learning, but not for a team:
+- only one person has it;
+- two people applying at once corrupt it;
+- it may contain passwords in plain text.
+Teams store it in a **remote backend** (S3, Azure Storage, Google Cloud Storage, HCP Terraform) with **encryption**, **versioning** and **locking**.
+= Look at state
+$ terraform state list
+- state list = every resource Terraform manages in this state
+$ terraform state show aws_instance.web
+- state show = all recorded attributes of one resource
+$ terraform output
+- output = the values of all outputs
+!! Never edit the state file by hand. Use `moved`, `import` and `removed` blocks, or `terraform state` commands, so changes are recorded and reviewable.
+= Import existing resources
+> import {
+>   to = aws_s3_bucket.legacy
+>   id = "acme-old-reports"
+> }
+- import { … } = adopt a bucket created by hand into Terraform
+- to = the resource block that will manage it
+- id = the real resource's ID in the cloud
+$ terraform plan -generate-config-out=generated.tf
+- -generate-config-out = also write a matching resource block for you to tidy up
 = Real-time example | PRACTICE
-A laptop with the only state file was lost. The team had to import 60 resources one by one. Since then: remote state.
+A team kept state only on one engineer's laptop. The laptop was stolen. Terraform no longer knew it owned 60 resources, and the team spent two days importing them one by one. Since then, state lives in an encrypted, versioned, locked S3 bucket.
 ? Where should team state live? | On a laptop | *In a locked remote backend | In chat
+^ https://developer.hashicorp.com/terraform/language/state Terraform: state
 
 # c-mod | Module | Intermediate | A building block you reuse.
 @@ user Team ; box Module ; cloud Networks ; bucket Registry
 = Without it | PROBLEM
-Eight teams each invent a network, eight different mistakes.
+Eight teams each write their own network setup. Each makes different mistakes: one forgets flow logs, another opens a database subnet to the internet. A security fix must be made eight times.
 = What it is | SOLUTION
-A folder of files with inputs and outputs, used like a function.
-= How it works
-Give it a version; teams upgrade when ready.
+A **module** is a folder of `.tf` files with **inputs** (variables) and **outputs**, used like a function. Every Terraform folder is already a module: the one you run is the **root module**; the ones it calls are **child modules**.
+Modules can come from a local folder, a Git repository or a registry.
+= Call a module
+> module "network" {
+>   source  = "terraform-aws-modules/vpc/aws"
+>   version = "~> 6.0"
+>   name    = "shop-prod"
+>   cidr    = "10.0.0.0/16"
+>   azs     = ["ap-south-1a", "ap-south-1b"]
+> }
+- module "network" = your local name for this use of the module
+- source = where it comes from: here the public registry
+- version = which versions are allowed; always pin
+- name, cidr, azs = inputs defined by the module's variables
+Use its results as `module.network.vpc_id`.
+$ terraform init
+- init = also downloads modules into `.terraform/modules`
+= Write your own
+> modules/bucket/variables.tf   variable "name" {}
+> modules/bucket/main.tf        resource "aws_s3_bucket" "this" { bucket = var.name }
+> modules/bucket/outputs.tf     output "arn" { value = aws_s3_bucket.this.arn }
+> module "logs" { source = "./modules/bucket"  name = "acme-logs" }
+- source = "./modules/bucket" = a local folder
+Good modules have few required inputs, safe defaults (encryption on, public access off) and clear outputs.
 = Real-time example | PRACTICE
-The platform team's network module has logging and private subnets built in. A fix reaches all teams with one version change.
+A platform team publishes a network module with private subnets and logging built in. Eight teams use it at version 3.2. When a security improvement ships as 3.3, each team upgrades with a one-line version change and a reviewed plan.
 ? Modules are for... | secrets | *reuse | logs
+^ https://developer.hashicorp.com/terraform/language/modules Terraform: modules

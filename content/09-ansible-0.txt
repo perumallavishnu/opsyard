@@ -54,53 +54,185 @@ Content moves into **collections**; the core becomes small.
 # c-inv | Inventory | Beginner | The list of machines.
 @@ user Admin ; doc Inventory ; server Servers ; folder Groups
 = Without it | PROBLEM
-You type each server name each time.
+To change 20 servers you would type 20 host names on every command, and you would surely forget one. Nobody would know which servers are web servers and which are databases.
 = What it is | SOLUTION
-A list of hosts in **groups** such as web, db.
-= How it works
+The **inventory** is the list of machines Ansible manages (called **hosts**), sorted into **groups** such as `web` and `db`. You then target a group by name: "install nginx on `web`".
+Every inventory also has two automatic groups: `all` (every host) and `ungrouped`.
+= An INI inventory
 > [web]
-> web1
-> web2
-Cloud plugins can build it from AWS tags.
+> web1 ansible_host=10.0.1.11
+> web2 ansible_host=10.0.1.12
+> [db]
+> db1 ansible_host=10.0.2.11 ansible_user=ubuntu
+> [prod:children]
+> web
+> db
+- [web] = start of a group named web
+- web1 = the name Ansible uses for this host
+- ansible_host=10.0.1.11 = the real address to connect to
+- ansible_user=ubuntu = the SSH user for this host
+- [prod:children] = a group made of other groups
+= The same in YAML
+> all:
+>   children:
+>     web:
+>       hosts:
+>         web1: { ansible_host: 10.0.1.11 }
+>         web2: { ansible_host: 10.0.1.12 }
+YAML and INI mean the same; use the one your team finds clearer.
+= Check the inventory
+$ ansible-inventory -i hosts.ini --graph
+- ansible-inventory = inspect an inventory
+- -i hosts.ini = which inventory file
+- --graph = print the groups and hosts as a tree
+$ ansible web -i hosts.ini --list-hosts
+- web = a pattern: which hosts to target
+- --list-hosts = only list them, run nothing
+Patterns can combine groups: `web:db` (either), `web:&prod` (both), `web:!web2` (web except web2).
+= Dynamic inventory
+In the cloud, servers come and go. An **inventory plugin** asks the cloud for the current list:
+> plugin: amazon.aws.aws_ec2
+> regions: [ap-south-1]
+> keyed_groups:
+>   - key: tags.Role
+- plugin = use the AWS EC2 plugin (from the `amazon.aws` collection)
+- regions = where to look
+- keyed_groups … tags.Role = make a group per value of the instance tag "Role", such as `web`
 = Real-time example | PRACTICE
-Auto Scaling adds servers at noon; the dynamic inventory already includes them.
+An Auto Scaling group adds four web servers at noon when traffic peaks. The next Ansible run already includes them, because the dynamic inventory groups instances by their `Role=web` tag. Nobody edits a list by hand.
 ? Groups let you... | delete hosts | *address many hosts by one name | hide errors
+^ https://docs.ansible.com/ansible/latest/inventory_guide/intro_inventory.html Ansible: building an inventory
 
 # c-module | Module and task | Beginner | One job done properly.
 @@ user Admin ; cube Module ; server Server ; card Task
 = Without it | PROBLEM
-Every admin writes their own script to create a user.
+Every admin writes their own shell script to create a user or install a package. The scripts behave differently, fail halfway, and running one twice may create duplicates or errors.
 = What it is | SOLUTION
-A **module** knows one job: packages, files, services, users, clouds. A **task** calls it.
-= How it works
-Modules check first. Already right: `ok`. Changed: `changed`.
-$ ansible web -m ansible.builtin.service -a "name=nginx state=started"
+- A **module** is a small program that knows how to do one job properly: install packages (`apt`, `dnf`), manage files (`copy`, `template`, `file`), services (`service`), users (`user`), containers, cloud resources and thousands more.
+- A **task** is one call of a module with your arguments, written in a playbook.
+Modules describe a **state** ("nginx is installed"), not an action ("install nginx").
+= Idempotence: ok or changed
+Before changing anything, a module checks the current state:
+- already as wanted: it reports **ok** and does nothing;
+- different: it changes it and reports **changed**;
+- impossible: **failed**.
+So running the same task twice is safe: the second run reports ok. This property is called **idempotence**.
+= Run one module: ad hoc
+$ ansible web -i hosts.ini -m ansible.builtin.service -a "name=nginx state=started" --become
+- ansible = run a single module (an "ad hoc" command)
+- web = target the web group
+- -m ansible.builtin.service = which module, by full name
+- -a "name=nginx state=started" = the module's arguments: nginx must be running
+- --become = use sudo on the target
+$ ansible all -i hosts.ini -m ansible.builtin.command -a "uptime"
+- command = run a plain command; always reports changed because Ansible cannot know
+= Module documentation
+$ ansible-doc ansible.builtin.apt
+- ansible-doc = show a module's options and examples, offline
+$ ansible-doc -l | grep docker
+- -l = list all installed modules; grep filters
+= Prefer modules over shell
+| Instead of | Use |
+| `shell: apt install -y nginx` | `ansible.builtin.apt: { name: nginx, state: present }` |
+| `shell: systemctl restart nginx` | `ansible.builtin.service: { name: nginx, state: restarted }` |
+| `shell: mkdir -p /opt/app` | `ansible.builtin.file: { path: /opt/app, state: directory }` |
+Modules are idempotent, report changes correctly and work the same on every distribution.
 = Real-time example | PRACTICE
-Run twice: first time 12 changed, second time 0. That proves the state is right.
+A playbook prepares new servers. The first run reports 12 changed. Run immediately again, it reports 0 changed. That second clean run is the proof that the servers really are in the described state.
 ? Second run should report... | 12 changed | *0 changed | errors
+^ https://docs.ansible.com/ansible/latest/collections/ansible/builtin/index.html Ansible built-in modules
 
 # c-pb | Playbook and handler | Beginner | The written plan.
 @@ user Admin ; doc Playbook ; server Servers ; flag Handler
 = Without it | PROBLEM
-Commands are lost in the terminal history.
+Ad hoc commands are typed once and lost in the terminal history. Nobody can review them, repeat them exactly or see what the server is supposed to look like.
 = What it is | SOLUTION
-A YAML file: which hosts, which tasks, in which order. A **handler** runs only when something changed.
-= How it works
-Change the nginx file, notify the handler, reload nginx once at the end.
+A **playbook** is a YAML file listing **plays**. Each play says which **hosts** to target and which **tasks** to run on them, in order. It is the written, reviewable description of how servers should be.
+A **handler** is a special task that runs **only when notified** by a task that changed something, typically to restart a service after its configuration changed.
+= A first playbook
+> - name: Web servers
+>   hosts: web
+>   become: true
+>   tasks:
+>     - name: Install nginx
+>       ansible.builtin.apt:
+>         name: nginx
+>         state: present
+>         update_cache: true
+- - name: Web servers = one play, with a readable name
+- hosts: web = run on the web group
+- become: true = use sudo for all tasks
+- tasks = the list of tasks, in order
+- state: present = nginx must be installed (`absent` would remove it; `latest` would upgrade)
+- update_cache: true = run `apt update` first
+= Handlers
+>     - name: Configure nginx
+>       ansible.builtin.copy:
+>         src: nginx.conf
+>         dest: /etc/nginx/nginx.conf
+>       notify: Reload nginx
+>   handlers:
+>     - name: Reload nginx
+>       ansible.builtin.service:
+>         name: nginx
+>         state: reloaded
+- notify: Reload nginx = if this task changed something, queue that handler
+- handlers = defined like tasks, run once at the end of the play
+If the file was already correct, nothing is reloaded. If three tasks notify the same handler, it still runs only once.
+= Run it
+$ ansible-playbook -i hosts.ini web.yml --check --diff
+- ansible-playbook = run a playbook
+- --check = dry run: report what would change, change nothing
+- --diff = show the line-by-line difference for changed files
+$ ansible-playbook -i hosts.ini web.yml --limit web1
+- --limit web1 = run only on web1 this time
+The final **PLAY RECAP** shows, per host, how many tasks were ok, changed, failed or unreachable.
 = Real-time example | PRACTICE
-Disaster: a data centre is lost. The playbook sets up 30 new servers in an hour.
+A data centre is lost in a flood. The company's playbooks describe every server role. Engineers create 30 new servers in another region, add them to the inventory, and run the playbooks. In one hour the servers are configured exactly as before.
 ? A handler runs... | always | *when notified by a change | first
+^ https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_intro.html Ansible: intro to playbooks
 
 # c-role | Role, variable, vault | Intermediate | Reuse and secrets.
 @@ user Admin ; folder Role ; server Servers ; key Vault
 = Without them | PROBLEM
-The same 80 tasks copied into ten playbooks, with a password inside.
+The same 80 tasks to set up nginx are copied into ten playbooks. A fix must be made ten times, and the copies drift. Worse, the database password is written in the playbook in plain text, for everyone with access to the repository.
 = What they are | SOLUTION
-A **role** is a reusable bundle. **Variables** adapt it. **Vault** encrypts secrets.
-= How it works
-The first command makes the folder layout of a new role. The second turns a readable file into an encrypted one.
-$ ansible-galaxy role init nginx
-$ ansible-vault encrypt secrets.yml
+- A **role** is a reusable bundle of tasks, handlers, templates and default values for one purpose, such as "nginx" or "postgres".
+- **Variables** adapt a role to each use: a different domain name, port or version.
+- **Ansible Vault** encrypts files or values that contain secrets, so they can be committed safely.
+= Create a role
+$ ansible-galaxy role init roles/nginx
+- ansible-galaxy role init = create the standard folder layout for a new role
+- roles/nginx = where to create it
+> roles/nginx/
+>   tasks/main.yml       the tasks
+>   handlers/main.yml    the handlers
+>   templates/           Jinja2 templates such as nginx.conf.j2
+>   defaults/main.yml    default values users may override
+>   vars/main.yml        internal values, hard to override
+>   meta/main.yml        dependencies and information
+= Use it with variables
+> - hosts: web
+>   become: true
+>   roles:
+>     - role: nginx
+>       vars:
+>         nginx_domain: shop.example.com
+>         nginx_port: 443
+- roles = apply these roles to the hosts
+- vars = values for this use; they override the role's `defaults/`
+In a template, `{{ nginx_domain }}` is replaced by the value.
+= Encrypt secrets with Vault
+$ ansible-vault create group_vars/prod/vault.yml
+- create = make a new encrypted file and open it in your editor
+$ ansible-vault encrypt group_vars/prod/vault.yml
+- encrypt = encrypt an existing plain file in place
+$ ansible-vault edit group_vars/prod/vault.yml
+- edit = decrypt in the editor, re-encrypt on save
+$ ansible-playbook site.yml --ask-vault-pass
+- --ask-vault-pass = ask for the Vault password at the start; `--vault-password-file` reads it from a file in automation
+Add `no_log: true` to tasks that handle secrets, so the values do not appear in output.
 = Real-time example | PRACTICE
-One `nginx` role serves twelve teams; each sets only its own domain name.
+One `nginx` role, kept in one repository, serves twelve teams. Each team sets only `nginx_domain` and its certificate path. When a security setting must change, it changes once in the role, and every team gets it on their next run.
 ? Vault is for... | speed | *encrypting secrets | logs
+^ https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_reuse_roles.html Ansible: roles

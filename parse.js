@@ -39,6 +39,8 @@ export function parseSubject(text) {
     else if (k === '$') step.body.push({ k: 'cmd', t: v });
     else if (k === '>') step.body.push({ k: 'out', t: raw.replace(/^\s*> ?/, '') });
     else if (k === '|') step.body.push({ k: 'row', t: v });
+    // "- part = meaning" explains one word of the command above; "- text" is a bullet.
+    else if (k === '-') { const p = v.indexOf(' = '); step.body.push(p < 0 ? { k: 'li', t: v } : { k: 'part', a: v.slice(0, p), t: v.slice(p + 3) }); }
     else step.body.push({ k: 'p', t: l });
   });
   for (const c of sub.chapters) for (const l of c.lessons) defaults(l);

@@ -62,87 +62,161 @@ Microsoft makes its **Security Development Lifecycle** mandatory.
 # c-cia | Confidentiality, integrity, availability | Beginner | The three things security protects.
 @@ user Attacker ; shield CIA ; db Data ; team Users
 = Without it | PROBLEM
-Data is read, changed or blocked by the wrong people.
+"Make it secure" means nothing on its own. Without a clear idea of **what** you protect, teams buy tools at random and still miss the real risks.
 = What it is | SOLUTION
-**Confidentiality**: only the right people read. **Integrity**: nobody changes it unnoticed. **Availability**: it is there when needed.
-= How it works
-| Goal | Tools |
-| Confidentiality | Encryption, access control |
-| Integrity | Hashes, signatures, reviews |
-| Availability | Backups, spare capacity |
+Security protects three properties of information, known as the **CIA triad**:
+- **Confidentiality**: only the right people can read it.
+- **Integrity**: nobody can change it without being noticed.
+- **Availability**: it is there and working when needed.
+Every security control protects at least one of them, and every attack breaks at least one.
+= Tools for each goal
+| Goal | Attack that breaks it | Protection |
+| Confidentiality | Data leak, stolen password | Encryption, access control, MFA |
+| Integrity | Tampered file, changed price, fake update | Hashes, digital signatures, code review, audit logs |
+| Availability | Ransomware, DDoS, deleted database | Backups, redundancy, rate limits, DDoS protection |
+= See integrity in action
+$ sha256sum ubuntu-24.04-live-server-amd64.iso
+- sha256sum = calculate the file's SHA-256 hash, a fingerprint of its exact content
+> 8762f7e7…  ubuntu-24.04-live-server-amd64.iso
+Compare it with the hash published on the official site. If one byte was changed in transit, the hash is completely different.
 = Real-time example | PRACTICE
-Hospital records: leaked (C), altered (I) or locked by ransomware (A). Each needs its own protection.
+A hospital's patient records can be **leaked** to the press (confidentiality), **altered** so a dose is wrong (integrity), or **locked** by ransomware so doctors cannot see them in an emergency (availability). Each needs its own protection: encryption and access control, audit logs and signatures, and offline backups that are tested.
 ? Ransomware mainly breaks... | integrity of code | *availability | speed
+^ https://csrc.nist.gov/glossary/term/cia_triad NIST: CIA triad
 
 # c-auth | Authentication and authorization | Beginner | Who are you, and what may you do?
 @@ user Person ; gate Login ; db System ; key Second factor
 = Without it | PROBLEM
-Anyone can act as anyone.
+If a system does not check who is using it, anyone can act as anyone. If it checks identity but not permissions, every logged-in user can do everything.
 = What it is | SOLUTION
-**Authentication** proves who you are. **Authorization** decides what you may do.
-= How it works
-Password plus a second factor (**MFA**), or a passkey. Then roles give rights.
+Two separate questions, often confused:
+- **Authentication** (AuthN): **who are you?** Proven with something you know (password), have (phone, security key) or are (fingerprint).
+- **Authorization** (AuthZ): **what may you do?** Decided by roles and policies after you are identified.
+A 401 HTTP status means "not authenticated"; 403 means "authenticated, but not authorized".
+= Strong authentication
+- **MFA** (multi-factor authentication) needs two different kinds of proof. A stolen password alone is not enough.
+- **Passkeys** (FIDO2/WebAuthn) replace passwords with a key stored on your device, unlocked by fingerprint or PIN. They cannot be phished, because they only work on the real website.
+- **SSO** (single sign-on) with OpenID Connect or SAML: one company login for all tools, so disabling one account removes all access.
+!! SMS codes are better than nothing, but can be stolen by SIM swapping. Prefer an authenticator app, a security key or passkeys.
+= Tokens
+After login, applications usually hand out a **token**, such as a JWT, that the client sends with each request:
+> Authorization: Bearer eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1NDIiLCJyb2xlIjoic3VwcG9ydCJ9.…
+- Bearer = whoever holds this token is treated as the user, so it must be kept secret and short-lived
+- three parts separated by dots = header, claims (user ID, role, expiry) and signature
+The server checks the signature and expiry on every request; it must never trust claims without checking.
 = Real-time example | PRACTICE
-A password is stolen. MFA stops the login and alerts the user.
+An employee's password is stolen in a phishing email. The attacker tries to log in, but MFA asks for a code from the employee's phone. The login fails, the employee gets a warning, and the password is changed within minutes.
 ? "May you delete this?" is... | authentication | *authorization | encryption
+^ https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html OWASP: authentication cheat sheet
 
 # c-least | Least privilege and zero trust | Beginner | Only what is needed, checked each time.
 @@ user Attacker ; shield Small rights ; db Data ; server App
 = Without it | PROBLEM
-One stolen account can do everything.
+Everyone has admin "to save time". When one account is stolen, or one person makes a mistake, the damage has no limit. And once inside the office network, an attacker can reach every server.
 = What it is | SOLUTION
-Give each person and program only what its job needs. **Zero trust**: being inside the network is not a reason to be trusted.
-= How it works
-Roles, short-lived access, network rules, regular reviews.
+- **Least privilege**: every person and program gets only the permissions its job needs, for only as long as needed.
+- **Zero trust**: being inside the network is **not** a reason to be trusted. Every request is checked: who is asking, from which device, for what, and is it allowed now?
+Together they limit the **blast radius** of any single failure.
+= How it is applied
+| Practice | Example |
+| Narrow roles | A CI job may push to one registry, nothing else |
+| Short-lived access | Temporary cloud credentials that expire in an hour |
+| Just-in-time admin | Production admin rights granted for two hours, with approval and a log |
+| Segmented networks | The web tier cannot reach the database directly |
+| Regular reviews | Every quarter, remove access nobody used |
+= Check what you can do
+$ aws iam simulate-principal-policy --policy-source-arn arn:aws:iam::111122223333:role/ci --action-names s3:DeleteBucket
+- simulate-principal-policy = ask whether this role may do this action, without doing it
+$ kubectl auth can-i --list --as system:serviceaccount:shop:web
+- auth can-i --list = everything this Kubernetes identity is allowed to do
+If the list surprises you, the permissions are too wide.
 = Real-time example | PRACTICE
-A stolen CI token could only upload one package, so the damage was one package.
+An attacker steals a CI token from a leaked build log. The token could only upload one package to one registry, and expired an hour later. The damage was one bad package, caught by signature checks before deployment, instead of the whole company.
 ? Zero trust means... | trust nobody ever | *verify each request | no passwords
+^ https://csrc.nist.gov/pubs/sp/800/207/final NIST SP 800-207: Zero Trust Architecture
 
 # c-cve | Vulnerability, CVE, CVSS | Beginner | Names and scores for weaknesses.
 @@ user Researcher ; card CVE ; server Your app ; gauge CVSS
 = Without it | PROBLEM
 " a There is a hole in that thing.
-Nobody knows which hole, which version, or how bad.
+Without a shared naming system, nobody knows which weakness is meant, which versions are affected, or how serious it is. Scanners could not compare your software with known problems.
 = What it is | SOLUTION
-A **CVE** number names one public weakness. **CVSS** scores its severity from 0 to 10.
-= How it works
-Scanners compare your components with the list. Also look at **exploitation**: EPSS and CISA's KEV list show what is really attacked.
+- A **vulnerability** is a weakness that can be used to break confidentiality, integrity or availability.
+- A **CVE** (Common Vulnerabilities and Exposures) ID names one publicly known vulnerability: `CVE-2021-44228` is Log4Shell.
+- **CVSS** (Common Vulnerability Scoring System) gives a severity score from 0 to 10: Low, Medium, High (7–8.9), Critical (9–10).
+= Severity is not the same as risk
+A Critical score in a library function you never call is less urgent than a Medium one in your login page. Two more sources help decide:
+- **EPSS** estimates the probability that a CVE will be exploited in the next 30 days.
+- **CISA KEV** (Known Exploited Vulnerabilities) lists CVEs that are **actually being attacked**.
+Prioritise: on the KEV list or high EPSS, **and** reachable in your system, **and** exposed to the internet.
+= Find CVEs in what you ship
+$ trivy image --severity HIGH,CRITICAL --ignore-unfixed ghcr.io/acme/shop:1.8.2
+- trivy image = scan a container image's packages
+- --severity HIGH,CRITICAL = only serious findings
+- --ignore-unfixed = hide those with no fix available yet
+$ npm audit --omit=dev
+- npm audit = check Node.js dependencies against known vulnerabilities
+- --omit=dev = only packages that ship to production
 = Real-time example | PRACTICE
-Of 300 findings, 6 are on the KEV list and reachable. Those are fixed today, the rest are planned.
+A scan reports 300 findings. The team filters: 6 are on the KEV list and in code that handles internet traffic. Those are fixed and released the same day. The rest are planned over the next sprints, and accepted risks are written down with a reason and a review date.
 ? CVSS is a... | name | *severity score | scanner
+^ https://www.cisa.gov/known-exploited-vulnerabilities-catalog CISA KEV catalog
 
 # c-owasp | Common web weaknesses | Beginner | The mistakes found again and again.
 @@ user Attacker ; doc Input ; server Web app ; shield Defence
 = Without knowing them | PROBLEM
-Teams repeat the same mistakes for twenty years.
+The same mistakes have been made in web applications for over twenty years. Developers who never learned them repeat them, and attackers know exactly where to look.
 = What they are | SOLUTION
-The **OWASP Top 10** lists the most important risks for web applications.
-= How they work
-| Weakness | Defence |
-| Broken access control | Check rights on the server |
-| Injection | Parameterised queries |
-| Cross-site scripting | Escape output |
-| Misconfiguration | Safe defaults, scans |
-| Old components | Update, SCA |
-| Weak login | MFA, rate limits |
+The **OWASP Top 10**, published by the Open Worldwide Application Security Project, lists the most important risk categories for web applications.
+| Weakness | What goes wrong | Defence |
+| Broken access control | Users reach data or actions that are not theirs | Check ownership and rights on the server for every request |
+| Injection (SQL, command) | Input is run as code | Parameterised queries, never build commands from input |
+| Cross-site scripting (XSS) | Input is shown as HTML and runs in other users' browsers | Escape output, Content Security Policy |
+| Security misconfiguration | Debug mode on, default passwords, open buckets | Safe defaults, automated config scans |
+| Vulnerable components | Old libraries with known CVEs | Update, SCA scanning |
+| Authentication failures | Weak passwords, no rate limits | MFA, rate limiting, lockouts |
+= Injection, and how to stop it
+> query = "SELECT * FROM users WHERE name = '" + name + "'"
+If `name` is `' OR '1'='1`, the query returns every user. The fix is a **parameterised query**, where data can never become code:
+> db.query("SELECT * FROM users WHERE name = $1", [name])
+- $1 = a placeholder; the database receives the value separately and treats it only as data
+= Broken access control
+> GET /api/orders/1002
+The server must check that order 1002 belongs to the logged-in user, every time. Hiding the link in the interface is not protection; anyone can type the URL.
 = Real-time example | PRACTICE
-Changing `order=1001` to `1002` showed a stranger's order. The fix: check the owner on the server for each request.
+A customer notices that changing `order=1001` to `1002` in the address bar shows a stranger's order with their address. The fix is one check on the server: does this order belong to this user? An automated test now tries other users' IDs on every release.
 ? Best against SQL injection? | Longer passwords | *Parameterised queries | A bigger server
 ^ https://owasp.org/www-project-top-ten/ OWASP Top 10
 
 # c-scan | SAST, SCA, DAST, secret scanning | Intermediate | Four kinds of automatic checks.
 @@ user Developer ; gear Scanners ; box Release ; doc Report
 = Without them | PROBLEM
-Mistakes pass because people are tired.
+Code reviews catch some security mistakes, but people are tired, busy and cannot know every CVE in every library. Mistakes slip through.
 = What they are | SOLUTION
-| Check | Looks at |
-| SAST | Your source code |
-| SCA | Libraries you use |
-| DAST | The running app |
-| Secret scan | Keys in code |
-| IaC scan | Cloud settings |
-= How they work
-Run fast ones on each pull request, slow ones at night. Block only on serious, sure findings.
+| Check | Looks at | Finds | Example tools |
+| SAST (static analysis) | Your source code, without running it | Injection patterns, unsafe functions | Semgrep, CodeQL, SonarQube |
+| SCA (composition analysis) | Libraries you depend on | Known CVEs, licence problems | Dependabot, Trivy, Snyk |
+| DAST (dynamic analysis) | The running application | Missing headers, injection, XSS from outside | OWASP ZAP |
+| Secret scanning | Code and history | API keys, passwords | Gitleaks, GitHub push protection |
+| IaC scanning | Terraform, Kubernetes YAML, Dockerfiles | Public buckets, root containers | Trivy config, Checkov |
+= Run them
+$ semgrep scan --config auto
+- semgrep scan = static analysis of the current folder
+- --config auto = use recommended rules for the languages found
+$ gitleaks detect --source . --redact
+- gitleaks detect = search files and Git history for secrets
+- --redact = hide the secret values in the output
+$ trivy config ./infra
+- trivy config = check infrastructure files for insecure settings
+$ docker run -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t https://staging.example.com
+- zap-baseline.py -t … = a quick DAST scan of a running test site; only scan systems you are allowed to test
+= Where they run
+- **On the laptop**: a pre-commit secret scan stops keys before they ever leave.
+- **On each pull request**: SAST, SCA, secret and IaC scans, reported as comments.
+- **Against staging**: DAST after deployment.
+- **Nightly**: deeper scans of everything, including old images in the registry.
+Block merges only on serious, high-confidence findings; track the rest. A pipeline that cries wolf gets ignored.
 = Real-time example | PRACTICE
-A secret scan stops a cloud key before it leaves the laptop: a problem that never happened.
+A developer accidentally adds a cloud access key to a config file. The pre-commit secret scan stops the commit on her laptop and shows the line. The key never reaches GitHub, so there is nothing to revoke and no incident: a problem that never happened.
 ? Which checks libraries? | SAST | *SCA | DAST
+^ https://owasp.org/www-project-devsecops-guideline/ OWASP DevSecOps Guideline

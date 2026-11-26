@@ -7,26 +7,54 @@
 @ b gear 2 0 Build
 @ d box 3 0 Deploy
 @ r server 4 0 Run
-= At the end | PROBLEM
+= Security at the end | PROBLEM
 + p c b d r
 ~ !r>p findings
-A security review the week before launch finds design problems too late.
-= Plan
+In the old way, a security team reviews the product the week before launch. It finds a design flaw that needs months of rework, so the launch is either delayed or goes ahead with a known hole. Developers learn about security only as a blocker.
+**DevSecOps** puts security checks into every stage, automated where possible, so problems are found when they are cheap to fix. Moving checks earlier is called **shifting left**.
+= Plan: threat modelling
 * p
-**Threat modelling**: what are we building, what can go wrong, what will we do, did it work? STRIDE: spoofing, tampering, repudiation, information disclosure, denial of service, elevation of privilege.
+Before building, the team spends an hour on **threat modelling**, answering four questions:
+1. What are we building? (draw the data flow)
+2. What can go wrong?
+3. What will we do about it?
+4. Did we do a good enough job?
+**STRIDE** helps with question 2:
+| Letter | Threat | Example |
+| S | Spoofing | Pretending to be another user |
+| T | Tampering | Changing a price in a request |
+| R | Repudiation | Denying an action because there is no log |
+| I | Information disclosure | Leaking customer data |
+| D | Denial of service | Overloading the login page |
+| E | Elevation of privilege | A normal user becoming admin |
 = Code
 * c
-Secret scanning before commit, review, **SAST** reads source for dangerous patterns.
+- A **pre-commit** hook scans for secrets before code leaves the laptop.
+- **Code review** includes security questions: is input validated, are permissions checked?
+- **SAST** reads the source for dangerous patterns on every pull request.
+$ pre-commit install
+- pre-commit install = turn on the hooks listed in `.pre-commit-config.yaml` (for example gitleaks) for this repository
 = Build
 * b
-**SCA** checks dependencies against known vulnerabilities. Image and IaC scans check what you ship.
+- **SCA** checks dependencies against known vulnerabilities and licences.
+- **Container image scans** check the OS packages in images.
+- **IaC scans** check Terraform and Kubernetes files for insecure settings.
+- An **SBOM** records exactly what went into the build.
 = Deploy and run
 * d r
-**DAST** attacks a running test copy. Policies block bad configuration. Runtime tools such as Falco watch behaviour.
+- **DAST** attacks a running test copy from outside.
+- **Admission policies** in Kubernetes refuse insecure or unsigned workloads.
+- **Runtime security** tools such as Falco watch running containers for unexpected behaviour, like a shell starting in a web container.
+- **Cloud posture** tools (Security Hub, AWS Config) alert on misconfiguration in production.
 = Tune it | PRACTICE
-Two hundred warnings nobody reads is no security. Block on high-confidence, reachable issues; track the rest.
+Two hundred warnings that nobody reads is no security at all. Make the pipeline useful:
+- block only high-confidence, high-severity, reachable findings;
+- send the rest to a backlog with owners;
+- remove noisy rules or mark false positives with a reason;
+- measure time to fix, not number of findings.
 ? Which tool type tests a running app? | SAST | SCA | *DAST
 ^ https://owasp.org/www-project-devsecops-guideline/ OWASP DevSecOps Guideline
+^ https://owasp.org/www-community/Threat_Modeling OWASP: threat modelling
 
 # ds-secret | Managing secrets | Intermediate | Store, deliver, rotate.
 @ a pod 0 0 App
@@ -34,30 +62,48 @@ Two hundred warnings nobody reads is no security. Block on high-confidence, reac
 @ d db 2 0 Database
 @ g db 0 1 Git
 @ l doc 1 1 Audit log
-= In Git | PROBLEM
+= Secrets in Git | PROBLEM
 + a g
 ~ !g>a password
 : g err leaked
-Copies spread to every clone, log and backup.
+A database password committed to Git is copied to every clone, every fork, every CI log and every backup. Deleting it in a later commit does not help: it stays in history. Bots scan public GitHub for keys within minutes of a push.
 = A secret store | SOLUTION
 + v
 ~ a>v identity ;; v>a secret
-HashiCorp Vault, OpenBao, AWS Secrets Manager, Azure Key Vault. The app proves who it is using its platform identity.
-= Dynamic
+A **secret store** keeps secrets encrypted, controls who may read each one, and logs every access: HashiCorp Vault, OpenBao (its open-source fork), AWS Secrets Manager, Azure Key Vault, Google Secret Manager.
+The application proves **who it is** with its platform identity (a Kubernetes ServiceAccount, an AWS role), not with another password, and receives only the secrets it is allowed.
+$ vault kv put secret/shop/db username=shop password='S3cure!'
+- vault kv put = store a secret in the key-value engine
+- secret/shop/db = its path; permissions are given by path
+$ vault kv get -field=password secret/shop/db
+- -field=password = print only that field
+= Dynamic secrets
 + d
 ~ v>d create user ;; v>a 1 hour login
-Short-lived credentials made on request. A leak expires by itself.
+Better than storing a password: let the store **create** one on request. Vault's database engine creates a new database user for each application instance, valid for one hour, and deletes it afterwards.
+$ vault read database/creds/shop-readonly
+- database/creds/shop-readonly = ask for fresh credentials with the `shop-readonly` role
+> username  v-shop-readonly-x7Kq
+> password  A1b2…
+> lease_duration  1h
+A leaked dynamic credential expires by itself and can be traced to the exact instance that received it.
 = Rotate
 : d ok rotated
-Automate rotation. Support two valid values during the change.
+Static secrets must be changed (**rotated**) regularly and immediately after any suspected leak. Automate it: AWS Secrets Manager and Vault can rotate database passwords on a schedule.
+Applications must accept **two valid values** during the change (old and new), or they fail at the moment of rotation.
 = Audit
-Every read is recorded: which identity, which secret, when. After a leak, this shows what was exposed.
 + l
 ~ v>l who read what
-= If it leaks | RISK
+Every read is recorded: which identity, which secret, when, from where. After a leak, the audit log answers "what was exposed, and who had it?" instead of guessing.
+= If a secret leaks | RISK
 * g
-Revoke, replace, check use, then clean up. In that order.
+Act in this order:
+1. **Revoke** it at the provider: delete the key, change the password. Assume it is already copied.
+2. **Replace** it with a new one in the secret store, and redeploy.
+3. **Check** logs for any use of the leaked secret.
+4. **Clean up** history (`git filter-repo`) only after the secret is dead.
 ? Advantage of dynamic secrets? | Longer life | *Short life and traceable | No network
+^ https://developer.hashicorp.com/vault/docs/secrets/databases Vault: database secrets engine
 
 # ds-chain | Software supply chain | Advanced | Proving what you run is what you built.
 @ s db 0 0 Source
@@ -70,27 +116,52 @@ Revoke, replace, check use, then clean up. In that order.
 = Many ways in | PROBLEM
 + s b a
 ~ !s>b bad package ;; !b>a tampered
-Attackers go for dependencies, build servers and registries, since one success reaches many.
-= SBOM
+Attackers increasingly target the **supply chain** rather than your application, because one success reaches thousands of victims:
+- a popular open-source package is taken over and a malicious version published;
+- a look-alike package name (`reqeusts` instead of `requests`) is installed by a typo;
+- a build server is compromised and adds a back door during builds;
+- an image in a registry is replaced.
+= SBOM: know what is inside
 + sb
 ~ a>sb list
-A software bill of materials lists every component (SPDX or CycloneDX). When a flaw is announced, search it.
-$ syft acme/web:2.0 -o cyclonedx-json
-= Sign
+A **software bill of materials** lists every component in an artifact, with versions, in a standard format (SPDX or CycloneDX).
+$ syft ghcr.io/acme/web:2.0 -o cyclonedx-json > sbom.json
+- syft = generate an SBOM for an image, folder or archive
+- -o cyclonedx-json = in CycloneDX JSON format
+$ grype sbom:sbom.json
+- grype sbom:… = check the SBOM against vulnerability databases
+When the next Log4Shell is announced, you search your SBOMs and know in minutes which services are affected.
+= Sign artifacts
 + k
 ~ k>a signed
-$ cosign sign ghcr.io/acme/web@sha256:...
-Sigstore can sign with a short-lived identity instead of a long-kept key.
-= Provenance
+$ cosign sign ghcr.io/acme/web@sha256:4a1f…
+- cosign sign = attach a signature to the image in the registry
+- @sha256:… = sign the exact digest, not a movable tag
+With **Sigstore** "keyless" signing, the CI job signs using its short-lived OIDC identity ("built by workflow release.yml in acme/web on main"), recorded in a public transparency log. There is no long-lived signing key to steal.
+= Provenance and SLSA
 * b
-**SLSA** levels describe how trustworthy the build record is: which source, which builder, unaltered.
-= Verify
+**Provenance** is a signed record of how an artifact was built: which source commit, which builder, which steps.
+**SLSA** (Supply-chain Levels for Software Artifacts) defines levels of trust in that record; higher levels require builds on hardened, isolated build platforms that generate provenance automatically.
+$ docker buildx build --provenance=mode=max --sbom=true -t ghcr.io/acme/web:2.0 --push .
+- --provenance=mode=max = attach detailed build provenance to the image
+- --sbom=true = attach an SBOM too
+= Verify before running
 + g c
 ~ a>g ;; g>c verified only
 : g ok checked
-Signing without verifying does nothing. Enforce at admission.
-= Dependencies | PRACTICE
+A signature protects nothing unless someone **checks** it. Verify at deploy time:
+$ cosign verify ghcr.io/acme/web@sha256:4a1f… --certificate-identity-regexp 'https://github.com/acme/web/.github/workflows/release.yml@.*' --certificate-oidc-issuer https://token.actions.githubusercontent.com
+- cosign verify = check the image's signature
+- --certificate-identity-regexp = it must have been signed by this workflow
+- --certificate-oidc-issuer = through GitHub Actions' identity provider
+In Kubernetes, an admission policy (Kyverno, Sigstore policy-controller) runs this check automatically and refuses unsigned images.
+= Protect dependencies | PRACTICE
 * s
-Lock versions, delay brand-new releases, use a private proxy, beware look-alike names.
+- **Lock** exact versions with lockfiles (`package-lock.json`, `poetry.lock`) and install with `npm ci`.
+- **Delay** brand-new releases by a few days; most malicious versions are found and removed quickly.
+- Use a **private proxy** registry (Artifactory, Nexus) that caches approved packages.
+- Watch for **look-alike names**, and prefer well-maintained packages.
+- Enable **Dependabot** or Renovate so updates are small and regular.
 ? A signature helps only if you... | publish it | *verify it before running | rename the image
 ^ https://slsa.dev/ SLSA
+^ https://docs.sigstore.dev/ Sigstore documentation

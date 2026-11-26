@@ -60,91 +60,316 @@ Git 3.0 is planned with `main` as default branch, SHA-256 for new repositories a
 ? Why was Git written? | For websites | *The kernel lost its earlier tool | For games
 
 ## Parts of Git
+# c-install | Install and set up Git | Beginner | Get Git on your computer and tell it who you are.
+@@ user You ; gear Git ; laptop Your computer ; card Name and email
+= Without it | PROBLEM
+Git is a program. Until it is installed, the `git` command does not exist and the terminal answers with an error.
+> git: command not found
+Even after installing, Git does not know your name. Every commit must say who made it, so Git refuses to commit until you tell it.
+= What it is | SOLUTION
+Git is free, open-source software that runs on your own computer. You talk to it by typing commands that start with the word `git` in a terminal.
+- On **Windows** the terminal is PowerShell or Git Bash. On **macOS** and **Linux** it is the Terminal app.
+- Git works without internet. You only need a network to share work with others.
+- Editors such as VS Code have buttons for Git, but they run these same commands underneath. Learning the commands helps you understand what the buttons do.
+= Install it
+Pick the line for your system. Each one asks the system's package manager to download and install Git.
+$ winget install --id Git.Git -e
+- winget = Windows' built-in package manager
+- install = download and install a program
+- --id Git.Git = the exact package name of Git
+- -e = match that name exactly, so nothing similar is installed by mistake
+$ sudo apt install git
+- sudo = run as administrator, needed to install software on Ubuntu or Debian
+- apt install = Ubuntu's package manager, asked to install
+- git = the package to install
+$ brew install git
+- brew = Homebrew, the usual package manager on macOS
+Then check it worked. A version number means Git is ready.
+$ git --version
+> git version 2.47.1
+= Tell Git who you are
+These three commands run once per computer. They write to a settings file in your home folder (`~/.gitconfig`).
+$ git config --global user.name "Ana Rao"
+- git config = read or change Git settings
+- --global = for every repository of this user on this computer, not only the current one
+- user.name = the setting to change: the name shown in every commit
+- "Ana Rao" = the value; quotes keep the space inside one value
+$ git config --global user.email "ana@example.com"
+- user.email = the email stored in each commit. GitHub uses it to link commits to your account
+$ git config --global init.defaultBranch main
+- init.defaultBranch = the name of the first branch in new repositories. `main` is the common choice today
+! To keep your real email private, GitHub gives you a "noreply" address in Settings, Emails. Use that as `user.email`.
+= Check your settings
+$ git config --list --show-origin
+- --list = print every setting Git sees
+- --show-origin = also print which file each setting came from
+Without `--global`, a setting applies only to the repository you are in. That is how you use a work email in work projects and a personal one elsewhere.
+= Real-time example | PRACTICE
+Priya joins a company and gets a new laptop. She installs Git, sets her name and her work email, and clones the team's project. Her first commit shows "Priya Shah" in the history, so reviewers know who to ask about it.
+A month later she sees commits from "unknown" on a shared server. Someone forgot `user.name` there; now nobody can tell who made those changes.
+? What does --global change? | Only the current repository | *Settings for all your repositories on this computer | Settings on GitHub
+^ https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup Pro Git: first-time setup
+
 # c-repo | Repository | Beginner | The folder with a memory.
 @@ user You ; db Repository ; folder Files ; doc .git
 = Without it | PROBLEM
-A normal folder only knows how things are now.
+A normal folder only knows how things are **now**. When you save a file, the old content is gone.
+People work around this with copies: `report_final.docx`, `report_final2.docx`, `report_final_REALLY.docx`. After a week nobody knows which copy is right, what changed between them, or why.
 = What it is | SOLUTION
-A **repository** is your project folder plus a hidden `.git` folder holding all history.
-= How it works
+A **repository** (often shortened to "repo") is a normal project folder plus a hidden folder named `.git`.
+- Your files stay exactly where they are and work as usual.
+- The `.git` folder stores every saved version of every file, who saved it, when and why.
+- Delete `.git` and the folder becomes an ordinary folder again: the files stay, the history is gone.
+! Never edit files inside `.git` by hand. Git manages it.
+= Start a new repository
+Use this when you have a project on your computer that is not tracked yet.
+$ cd my-shop
 $ git init
-$ git clone https://github.com/acme/shop.git
-`init` starts a new one; `clone` copies an existing one with all its history. A **bare** repository has no working files and is used on servers.
+- cd my-shop = go into the project folder first. `init` works on the folder you are in
+- git init = create the hidden `.git` folder here, turning this folder into a repository
+> Initialized empty Git repository in /home/ana/my-shop/.git/
+"Empty" means no versions are saved yet. Your files are still there; Git simply has not recorded any of them.
+= Copy an existing repository
+Use this when the project already exists somewhere else, usually on GitHub.
+$ git clone https://github.com/octo-dev/shop-app.git
+- git clone = make a full copy of an existing repository
+- https://github.com/octo-dev/shop-app.git = the repository's address. Copy it from the green **Code** button on GitHub
+Clone does four things for you:
+- creates a folder named after the project (`shop-app`);
+- downloads **all** history, not just the latest files;
+- remembers the address under the short name `origin`, so later you can type `origin` instead of the long URL;
+- checks out the default branch, so the files appear ready to use.
+$ git clone https://github.com/octo-dev/shop-app.git learn-devops
+- learn-devops = optional last word: a different folder name for the copy
+= init or clone?
+| Situation | Command |
+| Brand-new project on your computer | `git init` |
+| Project already on GitHub or a server | `git clone <url>` |
+| You downloaded a ZIP from GitHub | `git clone` instead: a ZIP has no history |
+!! Do not run `git init` inside a folder that is already a repository, or inside your home folder. You would track files you never meant to.
 = Real-time example | PRACTICE
-Your laptop is stolen. You buy a new one, clone, and have every version of the project again.
-? History is stored in... | the cloud only | *the .git folder | the first file
+Ravi's laptop is stolen the night before a demo. His project was pushed to GitHub. On a borrowed laptop he runs `git clone` and within a minute has every file and every version of the last eight months back.
+His friend kept the same project only in a normal folder with no repository. When that disk failed, the work was gone.
+? Where is a repository's history stored? | Only on GitHub | *In the hidden .git folder | In the first file of the project
+^ https://git-scm.com/book/en/v2/Git-Basics-Getting-a-Git-Repository Pro Git: getting a repository
 
 # c-commit | Commit | Beginner | A saved point with a reason.
 @@ user Developer ; commit Commit ; db History ; card Message
 = Without it | PROBLEM
-Saving a file overwrites the last state, with no reason recorded.
+Pressing Save in an editor overwrites the file. There is no record of what the file looked like before, who changed it, or why. If a change breaks something, you cannot simply go back.
 = What it is | SOLUTION
-A snapshot of the project plus author, date, message and link to the one before. Its name is a hash.
-= How it works
+A **commit** is a saved snapshot of the project at one moment. Each commit stores:
+- the content of every tracked file at that moment;
+- the author's name and email, and the date and time;
+- a **message** saying why the change was made;
+- a link to the commit before it (its **parent**), so commits form a chain: the history.
+Every commit gets a unique ID, a long code such as `3f9a2c1…`. Usually the first 7 characters are enough to name it.
+= Two steps: stage, then commit
+Git does not save every edited file automatically. You first choose what goes into the next commit. This choosing is called **staging**.
+$ git status
+- git status = show which files changed, which are staged and which are new. Run it often; it changes nothing
 $ git add app.js
-$ git commit -m "Fix refund of zero amount"
-You choose what goes in by staging first.
+- git add = put this change in the staging area, the draft of the next commit
+- app.js = the file to stage. You can list several files
+$ git add .
+- . = "everything in this folder and below". Handy, but check `git status` first so you do not add secrets or build files
+Why two steps? You may have edited five files for two different reasons. Staging lets you save them as two separate commits with two clear messages.
+= Make the commit
+$ git commit -m "Fix refund when the amount is zero"
+- git commit = save the staged changes as a new commit
+- -m = "message follows". Without `-m`, Git opens a text editor for the message
+- "Fix refund…" = the message. Say **why**, in a short sentence that starts with a verb
+> [main 3f9a2c1] Fix refund when the amount is zero
+>  1 file changed, 4 insertions(+), 1 deletion(-)
+The output shows the branch (`main`), the new commit's short ID, and how much changed.
+= See the history
+$ git log --oneline
+- git log = list commits, newest first
+- --oneline = one short line per commit: ID and message
+> 3f9a2c1 Fix refund when the amount is zero
+> a12b9e0 Add refund button
+$ git show 3f9a2c1
+- git show = show one commit: its message and exactly which lines changed
+= Good commit messages | PRACTICE
+| Weak | Better |
+| `fix` | `Fix crash when cart is empty` |
+| `changes` | `Add email field to sign-up form` |
+| `wip stuff` | Split into several commits, one idea each |
+! One commit, one idea. Small commits are easier to review, and one bad change can be undone without losing the good ones.
 = Real-time example | PRACTICE
-Small commits with one idea each made it possible to undo only the wrong change in a Friday release, and keep the other nine.
-? A good commit holds... | a week of work | *one idea | only comments
+On a Friday a team releases ten changes. One of them breaks payments. Because every change was its own commit with a clear message, they find "Change rounding of prices" in two minutes and undo only that commit. The other nine stay live.
+? A good commit holds... | a week of mixed work | *one idea with a clear message | only file names
+^ https://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository Pro Git: recording changes
 
 # c-branch | Branch | Beginner | A separate line of work.
 @@ user Developer ; flag Branch ; db main ; commit Commits
 = Without it | PROBLEM
-Half-finished work sits in the same place as the version customers use.
+If everyone works on the same line of history, half-finished work sits in the same place as the version customers use. An urgent fix cannot go out until every unfinished feature is ready, or broken.
 = What it is | SOLUTION
-A **branch** is a movable name for a commit. New commits move it forward; others are not disturbed.
-= How it works
-Make a branch, work on it, return to main and join it:
-$ git switch -c login
+A **branch** is a separate line of commits. You can work on a branch without disturbing anyone else's work.
+Technically, a branch is only a **label pointing to one commit**. When you commit on a branch, the label moves forward to the new commit. That is why creating a branch is instant, even in a huge project: Git copies nothing, it writes one small label.
+- `main` is the usual name of the main branch: the version that is released.
+- Other branches are named after the work: `login-page`, `fix-refund-zero`.
+= Create and switch
+$ git branch
+- git branch = list branches. The current one has a `*`
+$ git switch -c login-page
+- git switch = move to another branch: your files change to that branch's version
+- -c = create the branch first ("c" for create)
+- login-page = the new branch's name: short, lowercase, words joined by hyphens
+New commits now move only `login-page`. `main` stays where it was.
 $ git switch main
-$ git merge login
+- main = an existing branch, so no `-c`
+! Commit or stash your edits before switching. Git refuses to switch if it would overwrite uncommitted changes.
+= Older commands you will still see
+| Older | Newer, clearer |
+| `git checkout login-page` | `git switch login-page` |
+| `git checkout -b login-page` | `git switch -c login-page` |
+| `git checkout -- app.js` | `git restore app.js` |
+`checkout` does several unrelated jobs, so Git added `switch` (branches) and `restore` (files) in 2019. Both styles work.
+= Join it back
+When the work is finished and reviewed, bring it into `main`:
+$ git switch main
+$ git merge login-page
+- git merge login-page = bring the commits of `login-page` into the branch you are on (`main`)
+$ git branch -d login-page
+- -d = delete the branch label. Safe: Git refuses if its commits are not merged yet. `-D` forces it
 = Real-time example | PRACTICE
-While a team builds a new checkout for two weeks on a branch, an urgent fix goes out from main the same day.
-? Creating a branch copies... | all files | *nothing, it adds a name | the server
+A team spends two weeks building a new checkout on the branch `new-checkout`. On day four a customer finds a wrong tax rate. A developer switches to `main`, makes the fix on a branch `fix-tax`, merges it the same day and releases. The unfinished checkout never reaches customers.
+? Creating a branch copies... | all files of the project | *nothing: it adds a label to a commit | the remote server
+^ https://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell Pro Git: branches in a nutshell
 
 # c-merge | Merge and conflict | Beginner | Joining two lines of work.
 @@ commit Branch A ; gear Merge ; db main ; commit Branch B
 = Without it | PROBLEM
-Someone would have to copy changes by hand, line by line.
+Two people work on separate branches. Without merging, someone would have to copy each change by hand, line by line, and would surely miss some.
 = What it is | SOLUTION
-Git compares both sides with their common ancestor and joins them.
-= How it works
-If both changed the same lines, Git stops and marks a **conflict**. A person decides.
+A **merge** joins the work of two branches. Git finds the last commit both branches share (the **common ancestor**), sees what each side changed since then, and combines both sets of changes.
+- Changes in different files, or different parts of a file, are joined automatically.
+- If only one side has new commits, Git just moves the label forward. This is a **fast-forward**: no new commit is needed.
+- Otherwise Git creates a **merge commit** with two parents, recording that two lines came together.
+= Merge step by step
+$ git switch main
+$ git pull
+- git pull = first get the latest `main` from the shared copy, so you merge into the current version
+$ git merge login-page
+- git merge = join the named branch into the current one
+- login-page = the branch whose work you are bringing in
+$ git merge --no-ff login-page
+- --no-ff = always create a merge commit, even when a fast-forward is possible. Keeps a visible record that a feature was merged
+= When both changed the same line: conflict
+Git cannot guess which version is right, so it stops and asks you. The file now contains both versions between markers:
 > <<<<<<< HEAD
 > price = 10
 > =======
 > price = 12
 > >>>>>>> sale
+- <<<<<<< HEAD = start of your current branch's version
+- ======= = divider between the two versions
+- >>>>>>> sale = end of the other branch's version (here the branch `sale`)
+= Resolve the conflict
+1. Open the file and decide: keep one side, the other, or write a combination.
+2. Delete all three marker lines.
+3. Tell Git it is solved, and finish the merge:
+$ git add pricing.js
+- git add = here it means "this conflict is solved"
+$ git commit
+- git commit = completes the merge. Git suggests a message
+$ git merge --abort
+- --abort = give up and return to how things were before the merge
+!! Never commit a file that still contains `<<<<<<<` markers. The program will not run.
 = Real-time example | PRACTICE
-Two people edit one price. The conflict makes them talk. Without it, one price would have silently won.
-? A conflict means... | Git is broken | *a person must choose | data is lost
+Two developers change the price of the same product: one to 10 for a sale, one to 12 for a new tax. The conflict stops the merge and makes them talk. Without it, one price would have silently replaced the other, and the shop would have charged the wrong amount.
+? A merge conflict means... | Git is broken | *a person must choose between two changes to the same lines | all data is lost
+^ https://git-scm.com/book/en/v2/Git-Branching-Basic-Branching-and-Merging Pro Git: basic merging
 
-# c-remote | Remote | Beginner | The shared copy.
+# c-remote | Remote, push and pull | Beginner | The shared copy, and the commands that sync with it.
 @@ user You ; db Local repo ; cloud Remote ; user Teammate
 = Without it | PROBLEM
-Your commits exist only on your machine.
+Commits live only in the `.git` folder on your computer. Your teammates cannot see them, and if your disk fails they are gone.
 = What it is | SOLUTION
-A **remote** is another copy of the repository, usually on GitHub or GitLab, called `origin`.
-= How it works
-$ git fetch
-$ git pull
+A **remote** is another copy of the same repository, usually on GitHub, GitLab or a company server. It is the meeting point: everyone sends their commits there and collects everyone else's.
+A remote has a short name. The one you cloned from is called **`origin`** automatically.
+$ git remote -v
+- git remote = list the remotes this repository knows
+- -v = verbose: also show their addresses
+> origin  https://github.com/octo-dev/shop-app.git (fetch)
+> origin  https://github.com/octo-dev/shop-app.git (push)
+= Connect a new project to GitHub
+If you started with `git init`, there is no remote yet. Create an empty repository on GitHub, then:
+$ git remote add origin https://github.com/octo-dev/shop-app.git
+- git remote add = remember a new remote
+- origin = the short name to give it. `origin` is the convention for the main remote
+- https://… = its address
+= Push: send your commits
+$ git push -u origin main
+- git push = upload commits that the remote does not have yet
+- -u = short for `--set-upstream`: remember that local `main` belongs with `origin/main`. Needed only the **first** time you push a branch
+- origin = which remote to send to
+- main = which branch to send. Use your branch name, for example `login-page`
+**Why `-u`?** After it, plain `git push` and `git pull` on this branch know where to go, and `git status` can tell you "your branch is ahead by 2 commits".
+**Without `-u`,** the push still works, but next time plain `git push` answers "fatal: The current branch has no upstream branch", and you must type `origin main` again.
 $ git push
-Fetch downloads, pull downloads and joins, push uploads.
+- (no other words) = push the current branch to its upstream, set earlier with `-u`
+= Older repositories use master
+Repositories created before about 2020 often call the main branch `master`. It works the same; only the name differs. Use whatever `git branch` shows:
+$ git push -u origin master
+= Fetch and pull: receive commits
+$ git fetch
+- git fetch = download new commits from the remote and update labels such as `origin/main`. Your files and branches do **not** change: it only lets you look first
+$ git pull
+- git pull = `fetch` and then `merge` the remote's commits into your current branch. Your files **do** change
+$ git pull --rebase
+- --rebase = instead of a merge commit, put your local commits on top of the downloaded ones. Gives a straight history
+| Command | Downloads? | Changes your files? |
+| `git fetch` | Yes | No |
+| `git pull` | Yes | Yes |
+| `git push` | No, it uploads | No |
+= Push rejected
+> ! [rejected]  main -> main (fetch first)
+This means the remote has commits you do not have yet: a teammate pushed first. Git refuses so their work is not overwritten.
+$ git pull --rebase
+$ git push
+!! Do not "fix" this with `git push --force`. It replaces the remote's history with yours and deletes your teammate's commits.
 = Real-time example | PRACTICE
-A team in three countries works on one product; everyone pushes to the same remote and reviews each other's branches.
-? Upload commits with... | fetch | *push | init
+A team works in Hyderabad, Berlin and Toronto. Before starting each morning, everyone runs `git pull`. When a task is done, they `git push` their branch and open a pull request. Nobody emails files, and the remote always holds the latest agreed version.
+? Which command downloads without changing your files? | git pull | *git fetch | git push
+^ https://git-scm.com/book/en/v2/Git-Basics-Working-with-Remotes Pro Git: working with remotes
+^ https://git-scm.com/docs/git-push git push reference
 
 # c-head | HEAD, tags and .gitignore | Beginner | Where you are, names for releases, and what to leave out.
 @@ user You ; flag HEAD ; commit Commit ; flag Tag v1.0
 = Without them | PROBLEM
-You would not know which version you look at, or which commit customers received. Passwords and build files would be committed.
-= What they are | SOLUTION
-**HEAD** is where you are now. A **tag** is a fixed name for one commit. **.gitignore** lists files Git should leave alone.
-= How it works
-$ git tag -a v1.0 -m "First release"
-$ git show v1.0
-A branch moves; a tag stays.
+Without a pointer to "where you are", you would not know which version is in your folder. Without fixed names, nobody could say which commit customers received in version 1.0. Without an ignore list, passwords and large build files would end up in history.
+= HEAD: where you are | SOLUTION
+**HEAD** is Git's name for "the commit you are on now". Normally it points to a branch, and that branch points to a commit.
+- When you commit, the branch moves and HEAD moves with it.
+- `HEAD~1` means "one commit before HEAD", `HEAD~3` three before.
+$ git log --oneline -3
+- -3 = show only the last three commits
+$ git switch --detach v1.0
+- --detach = point HEAD straight at a commit instead of a branch: "detached HEAD". Good for looking around; create a branch before committing here
+= Tags: fixed names for releases
+A **tag** is a label that never moves. Branches move with every commit; a tag stays on one commit forever.
+$ git tag -a v1.0 -m "First public release"
+- git tag = create a tag
+- -a = annotated: stores who tagged, when and a message. Use it for releases
+- v1.0 = the tag's name. Versions often follow MAJOR.MINOR.PATCH
+- -m = the tag's message
+$ git push origin v1.0
+- push origin v1.0 = send the tag to the remote. Tags are **not** pushed by a normal `git push`
+= .gitignore: what to leave out
+A text file named `.gitignore` in the project folder lists files Git should never track:
+> node_modules/
+> dist/
+> .env
+> *.log
+- node_modules/ = installed packages: large, and anyone can reinstall them
+- dist/ = build output: made from the code, so not worth storing
+- .env = secrets such as passwords and API keys
+- *.log = any file ending in .log; `*` matches any name
+!! `.gitignore` does not affect files already committed. Remove them from tracking with `git rm --cached .env`, and change any secret that was committed.
 = Real-time example | PRACTICE
-A customer reports a bug in 1.0. `git switch --detach v1.0` shows exactly the code they have.
-? A tag is for... | daily work | *marking a release | secrets
+A customer reports a bug in version 1.0, but `main` has moved on by 300 commits. A developer runs `git switch --detach v1.0` and sees exactly the code that customer has, reproduces the bug, and prepares a fix.
+? A tag is used for... | daily unfinished work | *marking a release that never moves | storing secrets
+^ https://git-scm.com/book/en/v2/Git-Basics-Tagging Pro Git: tagging

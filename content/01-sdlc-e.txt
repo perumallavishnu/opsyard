@@ -12,43 +12,54 @@
 + t
 " t Who is fixing the login bug?
 " t I thought you were.
-Tasks in emails, chats and heads get lost, done twice or never.
+When tasks live in emails, chat threads and people's heads:
+- the same bug is fixed twice by two people, or by nobody;
+- nobody can say what is finished, what is blocked and what is next;
+- when someone is ill or leaves, their knowledge leaves with them;
+- the client asks "when?" and nobody can answer with facts.
 = One place for work | SOLUTION
 + j
 w t>j every task
-**Jira** records each piece of work: what, who, state, priority, history.
+A **work tracker** such as **Jira** records each piece of work as an item with: what needs doing, who does it, its current state, its priority, and the complete history of comments and changes. Everyone, including the client, sees the same picture.
 = One place for knowledge
 + w
 ~ j>w links
-**Confluence** (or a wiki) keeps decisions, meeting notes, designs and guides. Jira says *what to do*; Confluence says *why and how*.
+**Confluence** (or another wiki) keeps longer-lived knowledge: decisions and their reasons, meeting notes, designs, how-to guides, onboarding pages.
+- Jira says **what** to do and its state.
+- Confluence says **why** and **how**.
+Link them both ways, so a ticket points to the design page and the page lists its tickets.
 = Code, design and talk
 + g c f
 ~ t>g code ;; g>j linked
-| Tool | For |
-| GitHub or GitLab | Code, review, pipelines |
-| Figma | Screen designs |
-| Slack or Teams | Quick talk |
-| Jenkins or Actions | Build and deploy |
-| TestRail, Xray or Zephyr | Test cases |
-| Grafana | Watching production |
+| Tool | Used for | Connects to Jira by |
+| GitHub or GitLab | Code, reviews, pipelines | The ticket key in branch and commit names |
+| Figma | Screen designs and prototypes | A link in the ticket |
+| Slack or Microsoft Teams | Quick conversations | Ticket links and bots |
+| Jenkins or GitHub Actions | Build and deploy | Build status shown in the ticket |
+| TestRail, Xray or Zephyr | Test cases and test runs | Tests linked to stories |
+| Grafana, Datadog | Watching production | Alerts can open incident tickets |
 = The rule that saves teams | PRACTICE
 " t No ticket, no work.
-If a decision is made in chat, copy it to the ticket. In three months nobody will find the chat.
+Two simple team rules:
+- **No ticket, no work**: anything that takes more than a few minutes gets an item, so it is visible and counted.
+- **Decisions go in the ticket**: if something is decided in a call or chat, write one line in the ticket ("Agreed with Priya: refunds only within 30 days"). In three months nobody will find the chat message.
 = Alternatives to Jira
-Azure Boards, GitHub Projects, Linear, Trello, YouTrack. The ideas are the same: items, states, boards, reports.
+Azure Boards, GitHub Projects, GitLab Issues, Linear, Trello, YouTrack and ClickUp do the same job. The ideas you learn here (items, types, workflows, boards, sprints, reports) carry over to all of them.
 ? Where does the reason for a design decision belong? | In chat | *Confluence, linked from the ticket | In someone's memory
+^ https://www.atlassian.com/software/confluence/resources/guides/get-started/overview Confluence overview
 
 # jira-why | Why Jira exists | Beginner | From a bug list to the place where projects live.
 @h 2002 Bug tracker ; 2009 Agile boards ; 2017 Jira Cloud focus ; 2025 Work items
 = 2002: a bug tracker | HISTORY
-Atlassian, from Sydney, releases Jira to track bugs and issues. The name comes from *Gojira*, the Japanese name of Godzilla.
+Atlassian, a company from Sydney, releases Jira to track software bugs and issues. The name comes from *Gojira*, the Japanese name of Godzilla, a playful nod to Bugzilla, a popular bug tracker of the time.
 = Agile boards | HISTORY
-The GreenHopper add-on brought boards, backlogs and sprints. It later became part of the product, and Jira grew from a bug list into a planning tool.
+The GreenHopper add-on brought boards, backlogs and sprints to Jira. It later became part of the product (Jira Software), and Jira grew from a bug list into the planning tool for agile teams.
 = Cloud | HISTORY
-Atlassian moved its focus to the hosted version and ended new licences for the Server edition in 2021.
+Atlassian moved its focus to the hosted Cloud version and stopped selling new licences for the self-hosted Server edition in 2021; large companies that must host it themselves use Data Center.
 = New words | HISTORY
-In 2025 *issues* were renamed **work items**, and *projects* are becoming **spaces** in Jira Cloud. Screens and older guides mix both words.
+In 2025 Jira Cloud renamed *issues* to **work items**, and *projects* are becoming **spaces**. Screens, older guides and colleagues mix both words, so you will hear both.
 ? What was Jira at first? | A chat tool | *A bug and issue tracker | A code editor
+^ https://www.atlassian.com/blog/jira/jira-turns-20 Atlassian: Jira's history
 
 # jira | Jira basics: items, workflows, boards | Beginner | The building blocks of every Jira project.
 @ epic folder 0 0 Epic
@@ -59,37 +70,70 @@ In 2025 *issues* were renamed **work items**, and *projects* are becoming **spac
 @ rep gauge 3 1 Reports
 = Work item
 + story
-Every piece of work is a **work item** with a key such as `SHOP-42`, a type, summary, description, assignee, reporter, priority, labels and history.
+Every piece of work is a **work item** (formerly "issue"). Its main fields:
+| Field | Meaning |
+| Key | Unique ID: space key plus number, such as `SHOP-42` |
+| Type | Epic, Story, Task, Bug, Subtask |
+| Summary | One-line title |
+| Description | Details, acceptance criteria, links |
+| Assignee | Who is working on it now |
+| Reporter | Who created it |
+| Priority | How soon it should be done |
+| Status | Where it is in the workflow |
+| Labels, Components | Tags and product areas for filtering |
+| Story points, Sprint, Fix version | Planning fields |
+Every change is recorded in the item's **History**, with who and when.
 = Types and hierarchy
 + epic bug
 ~ epic>story ;; epic>bug
 | Type | Meaning | Example |
-| Epic | Large goal | Payments |
-| Story | User value | Pay by card |
-| Task | Work without direct user value | Upgrade database |
-| Bug | Something is wrong | Refund fails |
-| Subtask | Part of a story | Write API |
+| Epic | A large goal, spanning several Sprints | Payments |
+| Story | Something of value to a user | Pay by credit card |
+| Task | Work with no direct user value | Upgrade the database to version 17 |
+| Bug | Something does not work as it should | Refund fails with error 500 |
+| Subtask | A piece of a story or task | Write the payment API |
+Stories, tasks and bugs sit **under** an epic (their parent); subtasks sit under a story, task or bug. Larger companies add levels above epics, such as Initiative.
 = Workflow
 + wf
 ~ story>wf
 * wf
-Statuses and allowed moves: To Do, In Progress, In Review, In Testing, Done. Rules can limit moves: "only a tester may move to Done".
+A **workflow** defines the **statuses** an item can have and the allowed **transitions** between them:
+> To Do → In Progress → In Review → In Testing → Done
+- To Do = accepted, not started
+- In Progress = someone is working on it
+- In Review = code is waiting for a teammate's review
+- In Testing = a tester is checking it on staging
+- Done = meets the Definition of Done
+Admins can add rules: "only a tester may move to Done", "a pull request must be linked before In Review", "ask for a resolution when closing".
 = Boards
 + board
 ~ wf>board
-A **Scrum board** has a backlog and sprints. A **Kanban board** has continuous columns and WIP limits. A board is a view over a saved filter.
-= JQL
+A **board** shows items as cards in columns, one column per status (or group of statuses).
+- A **Scrum board** has a backlog view and Sprints, with a start and end date.
+- A **Kanban board** has continuous flow and WIP limits per column; no Sprints.
+A board is a **view over a saved filter**: change the filter, and different items appear. One project can have several boards, for example one per team.
+= JQL: Jira Query Language
 * board
-Jira Query Language finds items.
-$ project = SHOP AND status = "In Review" AND assignee = currentUser()
-$ type = Bug AND created >= -7d AND resolution = EMPTY
-$ sprint in openSprints() AND labels = payments
+JQL finds items with precise conditions, like SQL for Jira. Type it in **Filters, Advanced search**.
+> project = SHOP AND status = "In Review" AND assignee = currentUser()
+- project = SHOP = only the SHOP space
+- status = "In Review" = quotes because of the space
+- assignee = currentUser() = assigned to whoever runs the search
+> type = Bug AND created >= -7d AND resolution = EMPTY ORDER BY priority DESC
+- created >= -7d = created in the last 7 days
+- resolution = EMPTY = not resolved yet
+- ORDER BY priority DESC = highest priority first
+> sprint in openSprints() AND labels = payments
+- sprint in openSprints() = in any Sprint that is running now
+Save a search as a **filter** to reuse it, share it, or build a board or dashboard on it.
 = Reports and automation
 + rep
 ~ board>rep
-Burndown, velocity, cumulative flow, control chart. Automation rules: "when the pull request merges, move to In Testing".
+Built-in reports include the **burndown chart**, **velocity chart**, **cumulative flow diagram** and **control chart** (a later lesson explains each).
+**Automation rules** remove clicking: "when a pull request is merged, move the item to In Testing", "when all subtasks are done, move the story to Done", "every Monday, comment on items older than 14 days".
 ? What does a board show? | Only one sprint | *Work items matched by its filter | Every space
 ^ https://www.atlassian.com/software/jira/guides Jira guides
+^ https://support.atlassian.com/jira-software-cloud/docs/use-advanced-search-with-jira-query-language-jql/ Atlassian: JQL
 
 # jira-setup | Day 1: setting up the project | Beginner | The client meeting becomes a Jira project.
 @ c user 0 0 Client
@@ -97,33 +141,51 @@ Burndown, velocity, cumulative flow, control chart. Automation rules: "when the 
 @ j board 2 0 Jira: SHOP
 @ ad user 2 1 Jira admin
 @ t team 1 1 Dev team
-= Kick-off
+= Kick-off meeting
 + c po
 " c A shoe shop, live in June.
 " po I will write down the goals.
-The project in this chapter is the shoe shop from the first lesson. The product owner leaves the kick-off with goals, limits and dates.
+This chapter follows the shoe shop from the first lesson through Jira. At the kick-off, the client and the product owner agree on:
+- the **goal**: sell shoes online, first in India;
+- the **limits**: budget, launch in June, must accept cards and cash on delivery;
+- the **people**: who decides, who must be asked, who will use it.
+The product owner writes this on a Confluence page, which will be linked from Jira.
 = Create the space
 + j ad
 w po>ad please create SHOP
 w ad>j create
-The admin chooses a **template** (Scrum), a **key** (SHOP), and who may see and change it. The key starts every item: SHOP-1, SHOP-2.
-= Configure
+A Jira administrator creates the space (project):
+- **Template**: Scrum, because the team will work in two-week Sprints. (Kanban for a support team.)
+- **Name and key**: "Shoe Shop" with key **SHOP**. The key starts every item's ID: SHOP-1, SHOP-2…, so choose something short and clear; it is hard to change later.
+- **Access**: who may see the space, who may create and edit items.
+= Configure only what you need
 : j ok ready
 " ad Workflow: five statuses.
-Agree on item types, workflow, priorities, **components** (web, api, payments) and the **Definition of Done**. Keep it small. Every extra field is one more thing people skip.
-= Invite the team
+The team agrees on:
+| Setting | Choice for SHOP |
+| Item types | Epic, Story, Task, Bug, Subtask |
+| Workflow | To Do, In Progress, In Review, In Testing, Done |
+| Priorities | Highest, High, Medium, Low |
+| Components | web, api, payments, admin |
+| Definition of Done | Reviewed, tests pass, deployed to staging, tested against criteria |
+Keep it small. Every extra required field is one more thing people fill in badly or skip.
+= Invite the team and connect tools
 + t
 ~ t>j join
-Roles: administrator, member, viewer. Connect GitHub so branches and pull requests appear in items.
+Add the team with roles: **administrator** (configures the space), **member** (creates and works on items), **viewer** (reads, such as the client).
+Install the **GitHub for Jira** app (or GitLab, Bitbucket). From then on, branches, commits, pull requests and builds that mention a key such as SHOP-42 appear in that item automatically.
 = First epics
 w po>j 5 epics
-| Key | Epic |
-| SHOP-1 | Catalogue |
-| SHOP-2 | Account |
-| SHOP-3 | Cart |
-| SHOP-4 | Payments |
-| SHOP-5 | Orders and returns |
+The product owner turns the goals into a first set of epics, the big chunks of the product:
+| Key | Epic | Contains, for example |
+| SHOP-1 | Catalogue | Browse, search, product page |
+| SHOP-2 | Account | Sign up, log in, addresses |
+| SHOP-3 | Cart | Add, remove, change size |
+| SHOP-4 | Payments | Card, cash on delivery, refunds |
+| SHOP-5 | Orders and returns | Order history, tracking, returns |
+Stories will be written under each epic over the next days.
 ? The key SHOP is used for... | passwords | *naming each work item | the server
+^ https://support.atlassian.com/jira-software-cloud/docs/create-a-new-project/ Atlassian: create a project
 
 # jira-backlog | Day 2: writing a ready ticket | Beginner | From a wish to a ticket a developer can start.
 @ c user 0 0 Client
@@ -135,40 +197,57 @@ w po>j 5 epics
 + c t
 w !c>t "payment broken"
 : t err unclear
-Nobody can start. Which page? Which card? What should happen?
+> Summary: payment broken
+Nobody can start on this. Which page? Which payment method? What happened, and what should have happened? The developer must chase the reporter, who has forgotten the details. Unclear tickets are the most common cause of wasted work.
 = A good story | SOLUTION
-The same wish with a user, a reason and checks a tester can run:
 + ba
 w ba>t rewrite
 : t ok clear
+The business analyst rewrites the wish as a story a developer can start and a tester can check:
 > Summary: Pay by credit card
 > As a buyer I want to pay by card so that I get my shoes at once.
 > Acceptance criteria:
->   Given a valid card, when I pay, then I see an order number.
->   Given a refused card, then I see the reason and keep my cart.
+>   Given a valid card, when I pay, then I see an order number and get an email.
+>   Given a refused card, then I see the bank's reason and my cart is kept.
+>   Given 3-D Secure is required, then I am sent to my bank and back.
 > Design: link to Figma   Epic: SHOP-4   Component: payments
-= A good bug
+- Summary = short and specific; it appears on the board card
+- As a… I want… so that… = who, what and why
+- Acceptance criteria = the checks that decide when it is done
+- Design / Epic / Component = links and fields for context and filtering
+= A good bug report
 * t
 > Summary: Refund of a cancelled order fails with error 500
-> Steps: 1 open order 1009  2 press Refund
-> Expected: refund confirmed    Actual: error 500
-> Environment: staging, Chrome, build 214
-> Attached: screenshot, log
-**Severity**: how bad the damage is. **Priority**: how soon to fix. A spelling error on the home page is low severity, high priority.
+> Steps to reproduce: 1 log in as test buyer  2 open order 1009  3 press Refund
+> Expected: "Refund confirmed" message
+> Actual: error page, HTTP 500
+> Environment: staging, Chrome 131, build 214
+> Attachments: screenshot, server log extract
+- Steps to reproduce = exact actions, so anyone can see the bug happen
+- Expected / Actual = what should happen versus what does
+- Environment = where, which browser, which build
+- Attachments = evidence that saves time
+**Severity** is how bad the damage is; **priority** is how soon to fix it. A spelling mistake in the company name on the home page is low severity but high priority; a crash in a rarely used admin report may be high severity but lower priority.
 = Refinement
 + dev qa
 " dev What about 3-D Secure?
 " qa I will test an expired card.
 w qa>t test ideas
-Once a week the team reads upcoming tickets, asks, splits and estimates.
+Once a week the team meets for **backlog refinement**: they read the upcoming tickets together, ask questions, find missing cases, split stories that are too big, and estimate. Testers add test ideas early ("expired card", "card from another country"), which often reveals missing acceptance criteria before any code is written.
 = Estimating
 " dev Five points.
 " dev Eight, the bank API is new.
-In planning poker all show a number at once, then the highest and lowest explain. Put the agreed points in the ticket.
+In **planning poker** everyone chooses a card (1, 2, 3, 5, 8, 13) in secret, then all reveal at once. The highest and lowest explain their reasoning: here, one developer knows the bank's test API is new and badly documented. After a short discussion the team agrees on 8 and writes it in the **Story points** field.
 = Definition of Ready | PRACTICE
 * t
-Clear value, acceptance criteria, design linked, dependencies known, estimated, small enough for one Sprint.
+Before a story goes into a Sprint, the team checks it is **ready**:
+- the value is clear (who and why);
+- acceptance criteria are written;
+- designs are linked;
+- dependencies are known (another team, a bank test account);
+- it is estimated and small enough to finish in one Sprint.
 ? Severity means... | how soon to fix | *how bad the damage is | who reported it
+^ https://www.atlassian.com/agile/project-management/backlog-refinement-meeting Atlassian: backlog refinement
 
 # jira-sprint | Days 3 to 12: a Sprint on the board | Beginner | Planning, the daily board, blockers and the burndown.
 @ po user 0 0 Product owner
@@ -177,38 +256,46 @@ Clear value, acceptance criteria, design linked, dependencies known, estimated, 
 @ qa user 2 1 Tester
 @ sm user 0 1 Scrum master
 @ g gauge 1 1 Burndown
-= Planning
+= Sprint Planning in Jira
 + po b
 " po Goal: a buyer can pay by card.
 w po>b top stories
-In the backlog view, drag stories into the Sprint until it matches the team's recent velocity. Write the Sprint Goal. Press Start.
+In the **Backlog** view, the team drags stories from the top of the backlog into the Sprint section. Jira adds up their story points; the team stops near its recent **velocity** (for example 30 points), minus holidays.
+The product owner types the **Sprint Goal** ("A buyer can pay by card"), chooses the dates (two weeks), and presses **Start sprint**. The items now appear on the Sprint board.
 = Pick up work
 + dev
 " dev I take SHOP-42.
 ~ b>dev In Progress
-Assign yourself and move it to **In Progress** the moment you start. The board must tell the truth.
-= Daily Scrum
+A developer **assigns** the item to herself and drags it to **In Progress** the moment she starts. She creates her branch from the ticket's development panel so the key is in its name.
+The board must always tell the truth: an item in To Do that someone is secretly working on hides information from the team.
+= Daily Scrum at the board
 + sm
 " dev Bank test account is missing.
 : b warn SHOP-42 blocked
 w sm>po get the account
-Walk the board from right to left: what is closest to done? Flag blocked items with a reason.
+The team stands in front of the board (or shares it on screen) and walks it **from right to left**: what is closest to Done, and what is needed to finish it?
+A blocked item is **flagged** (it turns yellow) with a comment saying why: "waiting for bank test account". The Scrum Master takes the problem away to solve it with the product owner.
 = Review and test
 + qa
 w dev>b In Review
 ~ b>qa In Testing
 " qa Expired card passes.
-A teammate reviews the code, then the tester checks the acceptance criteria on staging.
+When the code is ready, the developer opens a pull request and moves the item to **In Review**. A teammate reviews it. After merge, the build is deployed to staging and the item moves to **In Testing**.
+The tester checks every acceptance criterion and the test ideas. "Expired card is accepted" is a defect: either a bug item linked to the story, or the story goes back to In Progress with a comment, according to the team's rules.
 = Watch the trend
 + g
 ~ b>g
 : g warn flat for 3 days
-The burndown is flat: five items started, none finished. The team stops starting and helps finish.
+On day 6, the **burndown chart** has been flat for three days: five items are In Progress, none finished. The team agrees to **stop starting and start finishing**: two developers help review and test the oldest items instead of picking up new ones. The line starts falling again.
 = End of the Sprint
 * po b
 " po 4 of 5 stories done.
-Review with the client, retrospective, then complete the Sprint. Unfinished items go back to the backlog; they do not count half.
+On the last day:
+- **Sprint Review**: the team demonstrates the four finished stories on staging to the client;
+- **Retrospective**: what to improve (here: request test accounts during refinement, not mid-Sprint);
+- **Complete sprint** in Jira: the unfinished story moves back to the backlog or into the next Sprint. Unfinished work does not count "half"; only Done stories add to velocity.
 ? When do you move a ticket to In Progress? | At the end of the day | *When you start it | When it is done
+^ https://www.atlassian.com/agile/tutorials/sprints Atlassian: sprints tutorial
 
 # jira-dev | One ticket from request to production | Intermediate | Jira, Git, CI and deployment joined by one key.
 @ j card 0 0 SHOP-42
@@ -223,31 +310,42 @@ Review with the client, retrospective, then complete the Sprint. Unfinished item
 ~ j>d assigned
 w d>g branch
 $ git switch -c SHOP-42-pay-by-card
-$ git commit -m "SHOP-42 Add card form"
-The key in the branch, commit or pull request name links them to the item.
+- switch -c = create and switch to a new branch
+- SHOP-42-pay-by-card = the ticket key first, then a short description
+$ git commit -m "SHOP-42 Add card payment form"
+- SHOP-42 at the start of the message = links this commit to the ticket
+With the GitHub for Jira app installed, any branch, commit or pull request that contains the key appears in that ticket automatically.
 = Pull request
 ~ g>j shows in the ticket
 * j g
-The ticket's development panel now shows branch, commits and the pull request. Nobody has to ask "is it merged?".
-= Build and test
+$ git push -u origin SHOP-42-pay-by-card
+- push -u origin … = upload the branch and remember where it is pushed
+The developer opens a pull request titled "SHOP-42 Pay by credit card". The ticket's **Development** panel now shows: 1 branch, 4 commits, 1 pull request (open). Nobody needs to ask "is it merged yet?"; they can see it.
+= Build and test automatically
 + ci
 ~ g>ci build ;; ci>j passed
-Automation can move the ticket when the pipeline passes.
-= Verify
-The tester opens the staging site, walks through each acceptance criterion and records the result in the ticket.
+The CI pipeline builds and tests the pull request, and its result (passed or failed) is shown in the ticket too. A Jira **automation rule** can move the ticket:
+> When: pull request merged   Then: transition work item to "In Testing"
+- When = the trigger, coming from GitHub
+- Then = the action in Jira
+= Verify on staging
 + q
 ~ ci>q staging
 " q All criteria met.
 : j ok Done
-= Release
+After the merge, the pipeline deploys to staging. The tester opens the staging site, walks through each acceptance criterion, and records the result in the ticket (or in a linked test run in Xray or Zephyr). All pass, so the ticket moves to **Done**.
+= Release with a version
 + p
 ~ ci>p version 1.4
-A Jira **version** (release) groups finished items: `1.4`. It gives release notes and shows what is in production.
-= After release
+A Jira **version** (release), such as `1.4`, groups the items that ship together; each item's **Fix version** field says which release contains it.
+- The **Releases** page shows progress: 18 of 20 items done.
+- Pressing **Release** marks the version as shipped, and Jira can generate **release notes** from the item summaries.
+- Anyone can see which features and fixes are in production.
+= After release, the loop starts again
 + s
 " s A buyer cannot pay from Norway.
 w s>j new bug linked
-Support opens a bug linked to SHOP-42. The circle starts again, with all history in one place.
+A week later, Support hears that buyers with Norwegian cards cannot pay. They open a bug, **link** it to SHOP-42 ("is caused by"), and the developer who picks it up sees the whole history: the original story, its discussion, the code, the tests and the release.
 ? What links a commit to a Jira ticket? | The author name | *The ticket key in the message or branch | The file size
 ^ https://support.atlassian.com/jira-software-cloud/docs/reference-issues-in-your-development-work/ Atlassian: reference work items
 
@@ -259,33 +357,46 @@ Support opens a bug linked to SHOP-42. The circle starts again, with all history
 @ f shield 3 1 Fixed
 @ c flag 2 1 Closed
 @ r card 1 1 Reopened
-= Found
+= Found and reported
 + q n
 " q Refund gives error 500.
 w q>n report
-Search for duplicates first, then report with steps, expected and actual result.
+A tester (or user, or monitoring alert) finds a defect. Before creating a new bug, search for an existing one:
+> type = Bug AND text ~ "refund" AND resolution = EMPTY
+- text ~ "refund" = items whose summary, description or comments contain "refund"
+If none exists, report it with steps, expected and actual result, environment and evidence. Its status is **New** (or To Do).
 = Triage
 + t
 ~ n>t review
 " t Real, critical, fix today.
-The lead confirms, sets priority and assigns. Other outcomes: **duplicate**, **cannot reproduce**, **not a bug**, **deferred**.
+In **triage**, a lead or the product owner looks at new bugs, usually daily:
+- Is it real? Can it be reproduced?
+- How severe is it, and how soon must it be fixed (priority)?
+- Who should fix it, and in which Sprint?
+Other outcomes are recorded as a **resolution**: **Duplicate** (linked to the original), **Cannot reproduce** (with what was tried), **Won't do** / **Not a bug** (works as designed), or **Deferred** to a later release.
 = Fix
 + d
 w t>d assign
 " d A missing null check.
-The developer reproduces it, writes a failing test, fixes, and opens a pull request.
+The developer moves the bug to In Progress, **reproduces** it first, then writes an automated test that **fails** because of the bug. Then they fix the code until the test passes, and open a pull request with the key, such as "SHOP-87 Handle refund of cancelled order". The new test stays forever, so this bug cannot quietly return.
 = Retest
 + f
 ~ d>f build 215 ;; f>q retest
-The same tester repeats the same steps, then checks nearby features (regression).
+When the fix is deployed (build 215), the bug goes back to the tester. They repeat **exactly** the original steps on that build, then also check nearby features (**regression testing**): refunds of normal orders, partial refunds.
 = Closed or reopened
 + c r
 ~ f>c works ;; !f>r still fails
-Only after a successful retest is it **closed**. If it fails, it is **reopened** with new evidence.
+- Retest passes: the tester sets the bug to **Done** / **Closed** with resolution **Fixed**, noting the build number.
+- Retest fails: it is **Reopened** with new evidence ("still fails for orders paid by wallet"), and goes back to the developer.
+A bug is closed by the person who verified it, not by the person who fixed it.
 = Learn from it | PRACTICE
 " t Why did no test catch this?
-Count where bugs are found. One found by a user is a missing test: add it.
+Track **where** bugs are found: in development, in testing, on staging, or by users in production. Each bug found by a user means a test was missing; add it. Over time, a rising share found early shows the team's quality is improving.
+> type = Bug AND created >= startOfMonth() AND "Found in" = Production
+- "Found in" = a custom field the team added for this purpose
+- startOfMonth() = since the first day of this month
 ? Who usually closes a bug? | The client | *The tester after a successful retest | Anyone
+^ https://www.atlassian.com/software/jira/guides/getting-started/basics Atlassian: Jira basics
 
 # jira-reports | Reports, dashboards and honest numbers | Intermediate | What each Jira report tells you, and what it does not.
 @ b board 0 0 Board
@@ -293,25 +404,35 @@ Count where bugs are found. One found by a user is a missing test: add it.
 @ v gauge 2 0 Velocity
 @ cf gauge 1 1 Cumulative flow
 @ m user 2 1 Manager
-= Burndown
+= Burndown chart
 + b bd
 ~ b>bd
-Work left per day in one Sprint. Flat: nothing finishes. Going up: scope was added.
-= Velocity
+The **burndown** shows work remaining (story points) for each day of **one Sprint**, with a grey ideal line falling to zero.
+| Shape | Usually means |
+| Follows the ideal line | Healthy |
+| Flat for several days | Items started but not finished |
+| Steps up | Scope added during the Sprint |
+| Drops only on the last day | Items are finished in a rush, or the board is updated late |
+= Velocity chart
 + v
 ~ bd>v
-Points finished per Sprint. Use the average of the last three to plan.
-!! Never compare teams by velocity, and never set it as a target. People will just write bigger numbers.
-= Cumulative flow
+**Velocity** is the number of story points **completed** per Sprint, shown as bars for recent Sprints, with "committed" beside "completed". Plan the next Sprint from the **average of the last three**, not the best one.
+!! Never compare teams by velocity, and never set it as a target. Points mean different things in each team, and people will simply start giving bigger estimates.
+= Cumulative flow diagram
 + cf
 ~ b>cf
-Bands per status over time. A band growing wider is a bottleneck, for example "In Testing".
+The **cumulative flow diagram** (CFD) shows, over weeks, how many items were in each status, as coloured bands stacked on top of each other.
+- Bands of steady width: work flows smoothly.
+- A band that **grows wider**, such as "In Testing", is a **bottleneck**: work arrives faster than it leaves.
+- The horizontal distance across the bands is roughly the cycle time.
 = Control chart
 * b
-Cycle time of each finished item. It answers "how long does a ticket usually take?".
-= Dashboard
+The **control chart** plots the **cycle time** of each finished item: how long it took from In Progress to Done. It shows the average and the spread, and answers "how long does a ticket usually take?" Dots far above the rest are worth a conversation: what made them slow?
+= Dashboards and honest forecasts
 + m
 ~ v>m ;; cf>m
 " m When will payments be ready?
-Answer with a range from real data: "two or three Sprints", not with a wish.
+A **dashboard** combines gadgets (filter results, charts, Sprint health) on one page for managers and clients.
+When asked "when will it be ready?", answer with a **range based on data**: "18 stories, about 45 points, remain in the Payments epic. Our velocity has been 25 to 32. So two Sprints at best, more likely two to three." That is honest, and it updates as the team learns.
 ? A widening "In Testing" band means... | testers are fast | *a bottleneck in testing | the Sprint ended
+^ https://support.atlassian.com/jira-software-cloud/docs/view-and-understand-the-cumulative-flow-diagram/ Atlassian: cumulative flow diagram

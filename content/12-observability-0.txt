@@ -59,63 +59,148 @@ OpenTracing and OpenCensus join as **OpenTelemetry**.
 # c-metric | Metric | Beginner | A number over time.
 @@ server Service ; gauge Metric ; user On-call ; db Time series
 = Without it | PROBLEM
-"It feels slow" cannot be compared with yesterday.
+"It feels slow today" cannot be compared with yesterday, proven or alerted on. Without numbers, every discussion about performance is an opinion.
 = What it is | SOLUTION
-A value measured again and again: requests, errors, memory.
-= How it works
-| Type | Example |
-| Counter | Requests so far |
-| Gauge | Memory now |
-| Histogram | Response times by range |
+A **metric** is a value measured again and again, stored with a timestamp: requests per second, error count, memory used, queue length. A list of values over time is a **time series**.
+Metrics are small and cheap to store, so you can keep them for months and draw trends.
+= Types of metrics
+| Type | Behaviour | Example |
+| Counter | Only goes up (resets to 0 on restart) | Total requests served, total errors |
+| Gauge | Goes up and down | Memory in use now, items in a queue |
+| Histogram | Counts values into ranges (buckets) | How many requests took under 100 ms, under 250 ms, under 1 s |
+| Summary | Pre-calculated percentiles in the app | p50, p99 response time |
+A counter's raw value means little; its **rate** of increase per second is what you graph.
+= Labels
+> http_requests_total{method="GET", route="/cart", status="500"} 37
+- http_requests_total = the metric name; `_total` marks a counter
+- {method="GET", …} = **labels**: dimensions you can filter and group by
+- 37 = the current value
+Each unique combination of labels is a separate time series.
+!! Never use labels with unbounded values such as user IDs or full URLs: they create millions of series and can crash the metrics system.
+= Percentiles, not averages
+An average response time of 200 ms can hide that 1 in 100 users waits 8 seconds. Use percentiles:
+- **p50** (median): half of the requests are faster;
+- **p95 / p99**: 95% / 99% are faster; this is what your slowest users feel.
 = Real-time example | PRACTICE
-Memory grows a little each day. The trend shows it will be full on Thursday, so it is fixed on Tuesday.
+A graph of memory per server shows a slow, steady climb of 2% a day after a release. Projected forward, servers will run out of memory on Thursday. The team finds the leak on Tuesday, before any user is affected.
 ? Requests so far is a... | gauge | *counter | log
+^ https://prometheus.io/docs/concepts/metric_types/ Prometheus: metric types
 
 # c-log | Log | Beginner | What happened, in order.
 @@ server Service ; doc Log ; user Developer ; db Log store
 = Without it | PROBLEM
-An order vanished and nothing was written down.
+A customer says their order vanished at 10:42. Nothing was written down, so nobody can tell what happened, where, or why.
 = What it is | SOLUTION
-A dated record of an event.
-= How it works
-Levels: debug, info, warn, error. Structured logs (JSON) can be searched by field.
-!! Never log passwords, card numbers or tokens.
+A **log** entry is a dated record of one event: "order 1009 paid", "connection to database failed". Logs answer **what exactly happened** to a particular request or user, which metrics cannot.
+= Levels
+| Level | Use for |
+| DEBUG | Detail for developers; usually off in production |
+| INFO | Normal events: started, order placed |
+| WARN | Something unexpected but handled: retrying |
+| ERROR | An operation failed |
+| FATAL | The program cannot continue |
+= Structured logs
+Plain text is hard to search. Write **structured** logs, usually JSON, with consistent fields:
+> {"time":"2026-11-26T10:42:03Z","level":"error","msg":"payment failed","order_id":1009,"request_id":"7f3a9c","trace_id":"4bf92f…","duration_ms":3021}
+- time = when, in UTC
+- level = how serious
+- msg = a short, fixed message (put variable parts in fields)
+- order_id / request_id = fields you can search exactly
+- trace_id = connects this log to the request's trace
+In containers, write logs to **standard output**; the platform collects them.
+= Search logs
+$ kubectl logs deploy/payments --since=15m | grep 7f3a9c
+- kubectl logs deploy/payments = logs of a Pod in the Deployment
+- --since=15m = only the last 15 minutes
+- grep 7f3a9c = only lines with this request ID
+In a log system the same search is a query, for example in Loki: `{app="payments"} | json | request_id="7f3a9c"`.
+!! Never log passwords, card numbers, tokens or full personal data. Logs are copied to many places and kept for a long time.
 = Real-time example | PRACTICE
-Searching for the request ID shows one order's path through five services in seconds.
+Support gives the request ID shown on the customer's error page. Searching for it shows the order's path through five services in seconds: the payment service timed out calling the bank after 3 seconds. The team raises the timeout and adds a retry.
 ? What must never be logged? | Times | *Passwords | Errors
+^ https://opentelemetry.io/docs/concepts/signals/logs/ OpenTelemetry: logs
 
 # c-trace | Trace and span | Intermediate | The journey of one request.
 @@ user User ; board Trace ; server Services ; card Span
 = Without it | PROBLEM
-The page takes 4 seconds and every team says "not us".
+A page takes 4 seconds. The request passed through the web front, the API, three services and two databases. Every team looks at their own dashboards and says "not us".
 = What it is | SOLUTION
-A **trace** follows one request; each piece of work is a **span** with start and length.
-= How it works
-A trace ID is passed from service to service in a header.
+- A **trace** follows **one request** through every service it touches.
+- Each piece of work in it (an HTTP call, a database query) is a **span**, with a name, start time, duration, status and attributes.
+- Spans form a tree: the first span is the root; calls it makes are its children.
+Shown as a waterfall chart, a trace makes the slow part obvious.
+= How it travels
+The first service creates a **trace ID** and passes it to every service it calls, in an HTTP header defined by the W3C:
+> traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+- 00 = version
+- 4bf92f… = the trace ID, the same for the whole request
+- 00f067… = the ID of the calling span (the parent)
+- 01 = flags; 01 means "sampled": record this trace
+**OpenTelemetry** libraries add and read this header automatically in most frameworks.
+= Read a trace
+> GET /checkout                     4.0 s
+>   ├─ POST /api/cart/price         3.7 s
+>   │   ├─ SELECT price … (×40)     3.6 s
+>   │   └─ GET /tax                 0.1 s
+>   └─ render page                  0.2 s
+- each line = a span with its duration; indentation = called by the line above
+- (×40) = the same query was made 40 times in a loop
 = Real-time example | PRACTICE
-The trace shows 3.6 of 4 seconds in one database call made 40 times. One query fixes it.
+The trace shows that 3.6 of the 4 seconds are spent in one database query called 40 times, once per item in the cart. Replacing it with one query for all items brings the page to 400 ms. Without the trace, three teams would have spent days guessing.
 ? One piece of work in a trace is a... | log | *span | counter
+^ https://opentelemetry.io/docs/concepts/signals/traces/ OpenTelemetry: traces
 
 # c-alert | Alert and on-call | Beginner | The right person, for the right reason.
 @@ gauge Monitor ; flag Alert ; user On-call ; doc Runbook
 = Without it | PROBLEM
-Fifty alarms a night, so people stop reading them. This is **alert fatigue**.
+Either nobody notices problems until customers complain, or the monitoring sends fifty alarms a night, most of them unimportant, so people stop reading them. This is called **alert fatigue**, and it hides the alert that matters.
 = What it is | SOLUTION
-A message that a person must act now. Everything else is a ticket or a graph.
-= How it works
-Alert on what users feel. Link a **runbook** with first steps. Rotate on-call fairly.
+An **alert** is a message that a person must **act now**. Everything else is a ticket for working hours or just a graph.
+- **Page** (phone call, push notification): users are affected now.
+- **Ticket**: something needs attention this week, such as a disk at 70%.
+**On-call** means a named person is responsible for answering pages during a period, in a fair **rotation**.
+= Good alerts
+- Alert on **symptoms users feel** (error rate, slow responses), not on every cause (CPU at 80%).
+- Include **what**, **how bad** and a link to a **runbook**: a page with first steps.
+- Use a duration, so a two-second spike does not wake anyone: `for: 5m`.
+= An alert rule
+> - alert: HighErrorRate
+>   expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.02
+>   for: 5m
+>   labels: { severity: page }
+>   annotations:
+>     summary: "More than 2% of requests are failing"
+>     runbook_url: https://wiki.acme.io/runbooks/high-error-rate
+- expr = the condition, in PromQL: share of 5xx responses over 5 minutes above 2%
+- for: 5m = must stay true for 5 minutes before firing
+- severity: page = route to the on-call phone
+- runbook_url = what to do first
 = Real-time example | PRACTICE
-A team deleted 60 of 75 alerts and answered the rest faster.
+A team had 75 alert rules and an exhausted on-call rotation. They deleted 60 that never led to action, turned 10 into tickets, and kept 5 symptom-based pages with runbooks. Pages fell from 40 a week to 3, and the remaining ones were answered in minutes.
 ? Page a person only when... | CPU is 60% | *someone must act now | a log is written
+^ https://sre.google/sre-book/monitoring-distributed-systems/ Google SRE: monitoring distributed systems
 
 # c-dash | Dashboard | Beginner | The state at a glance.
 @@ db Data ; board Dashboard ; team Team ; gauge Four signals
 = Without it | PROBLEM
-During an incident everyone runs different commands.
+During an incident everyone runs different commands on different servers and reads numbers aloud. Nobody sees the whole picture, and precious minutes pass.
 = What it is | SOLUTION
-A page of graphs for one question: is this service healthy?
-= How it works
-Start with latency, traffic, errors, saturation. Mark deployments on the graph.
+A **dashboard** is a page of graphs that answers one question, such as "is the checkout service healthy?". Everyone looks at the same thing at the same time.
+= What to put on it
+Start with the **four golden signals** for the service:
+| Signal | Graph |
+| Latency | p50 and p99 response time |
+| Traffic | Requests per second |
+| Errors | Share of failed requests |
+| Saturation | How full: CPU, memory, connection pool, queue length |
+Add **deployment markers** (vertical lines when a version went out), and the SLO with its remaining error budget.
+= Build it
+Grafana is the most common open-source tool. A panel is a query plus a visualisation:
+> sum by (route) (rate(http_requests_total{app="shop"}[5m]))
+- sum by (route) = one line per route
+- rate(…[5m]) = requests per second, averaged over 5 minutes
+Keep dashboards as JSON in Git ("dashboards as code"), so they are reviewed and restored like everything else.
 = Real-time example | PRACTICE
-Errors jump exactly at the deployment line. Rollback takes one minute, no debate.
+During an incident the team opens the checkout dashboard. The error graph jumps exactly at a deployment line drawn at 14:02. Nobody debates the cause: they roll back, and the graph falls back to normal within a minute.
 ? Mark on graphs... | birthdays | *deployments | prices
+^ https://grafana.com/docs/grafana/latest/dashboards/build-dashboards/best-practices/ Grafana: dashboard best practices

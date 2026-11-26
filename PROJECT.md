@@ -15,12 +15,12 @@ It is free: no login, no account, no payment. Progress is kept in the reader's o
 | Subject | Lessons | | Subject | Lessons |
 |---|---|---|---|---|
 | Software Lifecycles | 32 | | Kubernetes | 23 |
-| Linux and Networking | 18 | | Ansible | 11 |
-| Git | 17 | | Terraform and IaC | 12 |
-| GitHub | 12 | | AWS | 32 |
+| Linux and Networking | 19 | | Ansible | 11 |
+| Git | 18 | | Terraform and IaC | 13 |
+| GitHub | 12 | | AWS | 33 |
 | CI/CD | 12 | | Observability and SRE | 12 |
 | Jenkins | 14 | | DevSecOps | 11 |
-| Docker | 18 | | **All 13 subjects** | **224 lessons, 1,113 steps** |
+| Docker | 19 | | **All 13 subjects** | **229 lessons, 1,299 steps** |
 
 Besides lessons: 231 commands with animations and a risk label, and 30 Ubuntu and Kali tools with purpose, usage, risks and guidelines. Ten languages.
 
@@ -64,7 +64,7 @@ Open **http://localhost:4173** in a browser. Stop the server with `Ctrl + C`.
 A passing test ends with a line such as:
 
 ```
-ok: 13 subjects, 224 lessons, 1113 steps, 231 commands, 30 tools
+ok: 13 subjects, 229 lessons, 1299 steps, 231 commands, 30 tools
 ```
 
 **When do changes show?**
@@ -298,12 +298,16 @@ Operations tells the developer how the release behaves.
 | `!` / `!!` | Key idea / warning | `! Small changes are safer.` |
 | `$` / `>` | Command / output or file content | `$ docker ps` |
 | `\|` | Table row; the first is the header | `\| Type \| For \|` |
+| `-` with ` = ` | Explains one word of the command above it | `- -u = remember where this branch is pushed` |
+| `-` | Bullet point | `- Works offline.` |
 | `?` | Quiz, once per lesson; `*` marks the right answer | `? 2+2 \| 3 \| *4` |
 | `^` | Source link | `^ https://… Title` |
 
 **Tags:** CONCEPT (default), PROBLEM, SOLUTION, PRACTICE, RISK, HISTORY, SCALE.
 
 **Shapes:** `user team` (people) · `laptop server rack router cloud` · `db bucket folder doc card board` · `cube small gear box stack layer pod queue` · `shield key gate flag gauge commit`
+
+**How to write a step:** say what it is, why it exists, when to use it and what happens without it. After every command, explain each word with `-` lines, including flags such as `-u`, and show what the output means.
 
 **Rules the test checks**
 

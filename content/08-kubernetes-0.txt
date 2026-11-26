@@ -60,120 +60,398 @@ v1.36 in April: user namespaces stable. Ingress NGINX retired in March; Gateway 
 ^ https://kubernetes.io/blog/2024/06/06/10-years-of-kubernetes/ 10 years of Kubernetes
 
 ## Objects one by one
+# c-kctl | kubectl and YAML | Beginner | How you speak to a cluster.
+@@ user You ; laptop kubectl ; gear API server ; doc YAML file
+= Without it | PROBLEM
+A Kubernetes cluster is controlled through an HTTP API. Without a tool you would have to write raw web requests with certificates and JSON by hand for every action.
+= What it is | SOLUTION
+**kubectl** (said "cube control" or "cube C T L") is the command-line tool that talks to the cluster's **API server**. It reads connection details and credentials from a **kubeconfig** file, `~/.kube/config`.
+You usually describe what you want in a **YAML** file and let kubectl send it. This is **declarative**: you state the result, Kubernetes works out the steps.
+= Practise on your laptop
+$ kind create cluster --name lab
+- kind = "Kubernetes in Docker": runs a small cluster inside Docker containers
+- create cluster --name lab = make a cluster named lab and point kubectl at it
+`minikube start` and Docker Desktop's built-in Kubernetes are alternatives.
+$ kubectl get nodes
+- kubectl get nodes = list the machines in the cluster; if this works, you are connected
+= The shape of every command
+$ kubectl get pods -n shop -o wide
+- kubectl = the tool
+- get = the verb: `get`, `describe`, `apply`, `delete`, `logs`, `exec`…
+- pods = the resource type (`po` for short)
+- -n shop = in the namespace `shop`; without it, the `default` namespace
+- -o wide = output format: more columns, such as the node and the Pod IP. `-o yaml` prints the full object
+$ kubectl describe pod web-7d4b9c-x2k8p -n shop
+- describe = human-readable details plus recent **events**, the first place to look when something is wrong
+= Every object has four parts
+> apiVersion: apps/v1
+> kind: Deployment
+> metadata:
+>   name: web
+>   labels: { app: web }
+> spec:
+>   replicas: 3
+- apiVersion = which API group and version defines this kind of object
+- kind = the type of object
+- metadata = its name, namespace and labels
+- spec = what you **want**: here, three copies
+The cluster adds a fifth part, **status**: what **is**, right now. Controllers keep working until status matches spec.
+= Apply and delete
+$ kubectl apply -f web.yaml
+- apply = create the objects in the file, or update them to match it
+- -f web.yaml = the file; `-f k8s/` applies every file in a folder
+$ kubectl diff -f web.yaml
+- diff = show what would change, without changing anything
+$ kubectl delete -f web.yaml
+- delete -f = remove the objects described in the file
+$ kubectl explain deployment.spec.replicas
+- explain = built-in documentation for any field
+= Contexts: which cluster am I using?
+$ kubectl config get-contexts
+- get-contexts = clusters and users in your kubeconfig; `*` marks the current one
+$ kubectl config use-context prod-eu
+- use-context = switch to another cluster
+!! Check the current context before `delete` or `apply`. Running a test command against production is a classic accident.
+= Real-time example | PRACTICE
+A company keeps every YAML file in Git. One night a cluster is lost completely. They create a new empty cluster and run `kubectl apply -f k8s/`. Within twenty minutes every application is running again, exactly as described in the files.
+? Your wish goes in... | status | *spec | logs
+^ https://kubernetes.io/docs/reference/kubectl/ kubectl reference
+
 # c-cluster | Cluster and node | Beginner | The machines and their manager.
 @@ user You ; gear Control plane ; server Nodes ; db etcd
 = Without it | PROBLEM
-Ten separate servers, managed one at a time.
+A company runs 200 containers on ten servers. Someone must decide which container goes on which server, notice when a server dies, and restart its containers elsewhere, day and night. People cannot do that fast enough.
 = What it is | SOLUTION
-A **cluster** is a group of machines used as one. **Nodes** run your work; the **control plane** decides.
-= How it works
-$ kubectl get nodes
-Each node has a kubelet that reports and obeys.
+A **cluster** is a group of machines that Kubernetes uses as one big computer.
+- **Nodes** (worker nodes) are the machines that run your containers.
+- The **control plane** is the brain: it stores the desired state, decides where things run and reacts to failures.
+You talk only to the control plane; it gives work to the nodes.
+= The control plane parts
+| Part | Job |
+| kube-apiserver | The front door: every request goes through it, and it checks permissions |
+| etcd | A small, reliable database holding the whole cluster state |
+| kube-scheduler | Picks a node for each new Pod |
+| kube-controller-manager | Runs controllers that keep reality equal to the desired state |
+| cloud-controller-manager | Talks to the cloud: load balancers, disks |
+= What runs on each node
+| Part | Job |
+| kubelet | Agent that starts and watches the Pods assigned to this node, and reports back |
+| container runtime | containerd or CRI-O: actually runs the containers |
+| kube-proxy | Sets up network rules so Services reach the right Pods (some network plugins replace it) |
+= Look at the nodes
+$ kubectl get nodes -o wide
+- get nodes = list nodes with their status (`Ready` or `NotReady`) and version
+- -o wide = also internal IP, operating system and container runtime
+$ kubectl describe node worker-2
+- describe node = capacity, what is allocated, conditions (memory or disk pressure) and the Pods on it
+$ kubectl top nodes
+- top nodes = live CPU and memory use (needs the metrics-server add-on)
+= Take a node out for maintenance
+$ kubectl cordon worker-2
+- cordon = mark the node unschedulable: no **new** Pods go there
+$ kubectl drain worker-2 --ignore-daemonsets --delete-emptydir-data
+- drain = move existing Pods away safely, respecting disruption budgets
+- --ignore-daemonsets = leave Pods that must run on every node
+- --delete-emptydir-data = allow removing Pods that use temporary `emptyDir` storage
+$ kubectl uncordon worker-2
+- uncordon = allow scheduling again after maintenance
 = Real-time example | PRACTICE
-A shop has three nodes in three zones. One zone loses power; the other two carry on.
+A shop runs three nodes, one in each of three availability zones. One zone loses power. The control plane marks that node `NotReady`, and within a few minutes its Pods are started on the other two nodes. Customers see a few slow requests, nothing more.
 ? Who decides where work runs? | A node | *The control plane | The user
+^ https://kubernetes.io/docs/concepts/overview/components/ Kubernetes components
 
 # c-k8pod | Pod | Beginner | The smallest thing you run.
 @@ gear Deployment ; pod Pod ; team Users ; box Containers
 = Without it | PROBLEM
-A container and its helper would be placed on different machines and could not share files.
+Sometimes two containers must work as a pair: a web app and a small helper that ships its logs, sharing the same files. If the scheduler placed them on different machines, they could not share files or talk over `localhost`.
 = What it is | SOLUTION
-One or more containers that live together, with one IP address.
-= How it works
-Pods are temporary. They are replaced, not repaired.
-$ kubectl get pods
+A **Pod** is the smallest thing Kubernetes runs: one or more containers that always run together on the same node and share
+- one IP address (they reach each other on `localhost`);
+- storage volumes;
+- a life cycle: they start and stop together.
+Most Pods have just one container. Extra helper containers are called **sidecars**.
+= A Pod in YAML
+> apiVersion: v1
+> kind: Pod
+> metadata:
+>   name: web
+>   labels: { app: web }
+> spec:
+>   containers:
+>   - name: web
+>     image: nginx:1.28
+>     ports:
+>     - containerPort: 80
+- kind: Pod = the object type
+- labels: { app: web } = a tag other objects use to find this Pod
+- containers = the list of containers in the Pod
+- image: nginx:1.28 = which image to run
+- containerPort: 80 = documents the port the container listens on
+= Work with Pods
+$ kubectl get pods -o wide
+- get pods = list Pods with status (Running, Pending, CrashLoopBackOff…), restarts and age
+$ kubectl logs web
+- logs web = output of the Pod's container; add `-c name` when there are several, `-f` to follow, `--previous` for the crashed instance
+$ kubectl exec -it web -- sh
+- exec -it web = run a command inside the Pod, interactively
+- -- sh = everything after `--` is the command to run inside
+$ kubectl port-forward pod/web 8080:80
+- port-forward = connect port 8080 on your laptop to port 80 of the Pod, for testing without a Service
+= Pods are temporary
+A Pod is never repaired or moved. If its node dies or it is updated, it is **deleted and replaced** by a new Pod with a new name and a new IP. That is why you almost never create Pods directly: a **Deployment** creates and replaces them for you, and a **Service** gives them a stable address.
+= Common Pod states
+| Status | Means |
+| Pending | Waiting for a node, or pulling the image |
+| Running | At least one container is running |
+| CrashLoopBackOff | The container keeps crashing; Kubernetes waits longer before each retry |
+| ImagePullBackOff | The image cannot be downloaded: wrong name, tag or registry login |
+| OOMKilled | Used more memory than its limit |
 = Real-time example | PRACTICE
-A web container with a small helper that ships its logs, in one Pod.
+A web container writes logs to a shared folder. A small sidecar container in the same Pod reads that folder and sends the logs to the central log system. Each container has one job, and they always land on the same node together.
 ? Pods are... | permanent | *temporary | servers
+^ https://kubernetes.io/docs/concepts/workloads/pods/ Kubernetes: Pods
 
 # c-ns | Namespace, label, selector | Beginner | Order in a busy cluster.
 @@ user Team ; folder Namespace ; pod Pods ; card Labels
 = Without them | PROBLEM
-Two teams both call their app `web`, and one deletes the other's.
+Ten teams share one cluster. Two of them call their app `web`, one deletes the other's by mistake, and the test environment uses up all the memory that production needs.
 = What they are | SOLUTION
-A **namespace** is a room for a team or environment. **Labels** are tags such as `app=web`. **Selectors** find by label.
-= How it works
-$ kubectl get pods -n shop -l app=web
-Services and Deployments find their Pods by selectors.
+- A **namespace** is a named room inside the cluster, usually one per team, application or environment. Names must be unique only inside a namespace.
+- A **label** is a key-value tag on any object: `app=web`, `tier=frontend`, `env=prod`.
+- A **selector** finds objects by their labels: "all Pods with `app=web`".
+Labels are how Kubernetes objects find each other: a Service sends traffic to Pods matching its selector, and a Deployment manages Pods matching its selector.
+= Namespaces
+$ kubectl create namespace shop
+- create namespace shop = make a new namespace
+$ kubectl get pods -n shop
+- -n shop = in that namespace; `-A` means all namespaces
+$ kubectl config set-context --current --namespace=shop
+- set-context --current --namespace=shop = make `shop` the default for your commands, so you do not have to type `-n` each time
+= Labels and selectors
+$ kubectl get pods -l app=web
+- -l app=web = only objects whose label `app` equals `web`
+$ kubectl get pods -l 'env in (staging,prod),tier!=db'
+- env in (…) = label is one of these values; tier!=db = label is not db
+$ kubectl label pod web-x2k8p owner=team-a
+- label … owner=team-a = add a label to an existing object
+In YAML, a Service selects its Pods like this:
+> spec:
+>   selector:
+>     app: web
+= Quotas per namespace
+> apiVersion: v1
+> kind: ResourceQuota
+> metadata: { name: limits, namespace: test }
+> spec:
+>   hard:
+>     requests.memory: 16Gi
+>     pods: "50"
+- kind: ResourceQuota = a limit for a whole namespace
+- requests.memory: 16Gi = all Pods together may request at most 16 GiB
+- pods: "50" = at most 50 Pods
 = Real-time example | PRACTICE
-Namespaces `test` and `prod`, with quotas so test cannot use all memory.
+A company has namespaces `test` and `prod` in one cluster. `test` has a quota of 16 GiB. A load test with a memory leak hits the quota and stops there, while production keeps all the memory it needs.
 ? A Service finds Pods by... | name | *labels | age
+^ https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/ Kubernetes: labels and selectors
 
 # c-dep | Deployment and ReplicaSet | Beginner | Keep N copies, update safely.
 @@ user You ; board Deployment ; pod Pods ; folder ReplicaSet
 = Without it | PROBLEM
-A crashed Pod stays gone. Updating means downtime.
+If you create a Pod directly and its node dies, the Pod is simply gone; nobody brings it back. And to update to a new version, you would delete Pods and create new ones by hand, with downtime in between.
 = What it is | SOLUTION
-A **Deployment** states image and number of copies. Its **ReplicaSet** keeps that number.
-= How it works
-Change the image and new Pods replace old ones step by step.
+- A **Deployment** describes an application: which image, how many copies (**replicas**), and how to update.
+- It creates a **ReplicaSet**, whose only job is to keep exactly that number of matching Pods running. If one disappears, it creates another.
+- When you change the image, the Deployment creates a new ReplicaSet and moves Pods over step by step: a **rolling update**.
+= A Deployment
+> apiVersion: apps/v1
+> kind: Deployment
+> metadata: { name: web }
+> spec:
+>   replicas: 3
+>   selector:
+>     matchLabels: { app: web }
+>   template:
+>     metadata:
+>       labels: { app: web }
+>     spec:
+>       containers:
+>       - name: web
+>         image: ghcr.io/acme/web:1.4.0
+- replicas: 3 = keep three Pods running
+- selector.matchLabels = which Pods belong to this Deployment
+- template = the Pod to create; its labels must match the selector
+- image = the version to run
+= Update and watch
+$ kubectl set image deployment/web web=ghcr.io/acme/web:1.5.0
+- set image = change the image of container `web` in Deployment `web` (better: change the YAML and apply it)
+$ kubectl rollout status deployment/web
+- rollout status = wait and show progress until the update finishes or fails
+$ kubectl scale deployment/web --replicas=5
+- scale --replicas=5 = change the number of copies
+= Roll back
+$ kubectl rollout history deployment/web
+- rollout history = the list of previous versions (revisions)
 $ kubectl rollout undo deployment/web
+- rollout undo = go back to the previous revision
+$ kubectl rollout undo deployment/web --to-revision=3
+- --to-revision=3 = go back to a specific one
 = Real-time example | PRACTICE
-Version 2 fails its readiness probe. The rollout stops, users stay on version 1, the team fixes it after lunch.
+Version 1.5.0 has a bug: it never becomes ready. During the rolling update, the first new Pod fails its readiness check, so Kubernetes does not remove any more old Pods. Users stay on 1.4.0. The team sees the stuck rollout, runs `rollout undo`, and fixes the bug after lunch.
 ? Who keeps the number of Pods? | Service | *ReplicaSet | Secret
+^ https://kubernetes.io/docs/concepts/workloads/controllers/deployment/ Kubernetes: Deployments
 
 # c-service | Service | Beginner | One steady address.
 @@ pod Client ; router Service ; pod Web Pods ; db DNS
 = Without it | PROBLEM
-Pods change address with every restart.
+Pods are replaced all the time, and every new Pod gets a new IP address. If the shop calls the payment Pods by IP, it breaks after every update or node failure.
 = What it is | SOLUTION
-A stable name and address that passes traffic to ready Pods.
-= How it works
-ClusterIP inside, NodePort on each node, LoadBalancer from the cloud.
+A **Service** gives a set of Pods one **stable name and address**. It finds its Pods with a label selector and spreads traffic over those that are **ready**.
+Inside the cluster, every Service gets a DNS name: `payments` within the same namespace, or `payments.shop.svc.cluster.local` from anywhere.
+= A Service
+> apiVersion: v1
+> kind: Service
+> metadata: { name: payments }
+> spec:
+>   selector: { app: payments }
+>   ports:
+>   - port: 80
+>     targetPort: 8080
+- selector: { app: payments } = send traffic to Pods with this label
+- port: 80 = the port other programs call on the Service
+- targetPort: 8080 = the port the container actually listens on
+= Service types
+| Type | Reachable from | Use |
+| ClusterIP (default) | Inside the cluster only | Internal services: APIs, databases |
+| NodePort | Every node's IP, on a port 30000–32767 | Simple tests, on-premises |
+| LoadBalancer | The internet, through a cloud load balancer | Exposing one service publicly |
+| ExternalName | A DNS alias to something outside | Calling an external database by a local name |
+= Check and debug
+$ kubectl get svc -n shop
+- get svc = list Services with their cluster IP and ports
+$ kubectl get endpointslices -l kubernetes.io/service-name=payments
+- endpointslices = the Pod addresses currently behind the Service; empty means no ready Pod matches the selector
+$ kubectl run tmp --rm -it --image=busybox -- wget -qO- http://payments
+- run tmp --rm -it --image=busybox = start a throwaway Pod to test from inside the cluster
+- wget -qO- http://payments = call the Service by name and print the answer
 = Real-time example | PRACTICE
-The shop calls `http://payments`. Payments moved nodes four times today and the shop never noticed.
+The shop calls `http://payments`. During the day the payment Pods are moved four times because of updates and a node failure, each time with new addresses. The shop never notices: the Service name stays the same and always points at the ready Pods.
 ? Inside-only type? | NodePort | *ClusterIP | LoadBalancer
+^ https://kubernetes.io/docs/concepts/services-networking/service/ Kubernetes: Services
 
 # c-ingress | Ingress and Gateway | Intermediate | Many sites through one door.
 @@ user Visitor ; gate Gateway ; pod Services ; doc Routes
 = Without it | PROBLEM
-Each service needs its own cloud load balancer, and its own bill.
+Making every web service public with its own `LoadBalancer` Service means one cloud load balancer, one public IP and one bill per service. Twelve sites, twelve load balancers.
 = What it is | SOLUTION
-One entrance that sends `/shop` here and `/blog` there, and ends TLS.
-= How it works
-**Gateway API** is the recommended successor of Ingress. A controller does the real work.
+One shared entrance for HTTP traffic that routes by host name and path, and handles TLS certificates:
+- `shop.example.com/` goes to the `web` Service;
+- `shop.example.com/api` goes to the `api` Service.
+Kubernetes has two APIs for this:
+- **Ingress**: the older, simpler one, still widely used;
+- **Gateway API**: the recommended successor, more expressive, with roles split between platform team (Gateway) and app teams (routes).
+Both need a **controller** installed (such as NGINX Gateway Fabric, Traefik, Envoy Gateway or a cloud one) that does the real work.
+= A Gateway API route
+> apiVersion: gateway.networking.k8s.io/v1
+> kind: HTTPRoute
+> metadata: { name: shop }
+> spec:
+>   parentRefs: [{ name: public-gateway }]
+>   hostnames: ["shop.example.com"]
+>   rules:
+>   - matches: [{ path: { type: PathPrefix, value: /api } }]
+>     backendRefs: [{ name: api, port: 80 }]
+>   - backendRefs: [{ name: web, port: 80 }]
+- parentRefs = which Gateway (the shared entrance) this route attaches to
+- hostnames = which domain names it handles
+- matches … PathPrefix /api = requests whose path starts with /api
+- backendRefs = which Service and port receives them; the last rule, with no match, catches everything else
+= Check it
+$ kubectl get gateway,httproute -A
+- get gateway,httproute = list both kinds at once
+- -A = in all namespaces
+$ kubectl describe httproute shop
+- describe = shows whether the route was **Accepted** by its Gateway, and why not
+= Certificates
+**cert-manager** is an add-on that requests and renews TLS certificates automatically (for example from Let's Encrypt) and stores them as Secrets that the Gateway uses. Nobody has to remember an expiry date.
 = Real-time example | PRACTICE
-Twelve sites, one load balancer, certificates renewed by cert-manager.
+A media company runs twelve websites in one cluster behind one Gateway and one cloud load balancer. cert-manager renews all their certificates every 60 days. Adding a thirteenth site is one short HTTPRoute file.
 ? Recommended today? | Ingress only | *Gateway API | NodePort
+^ https://gateway-api.sigs.k8s.io/ Gateway API
 
 # c-cfg | ConfigMap and Secret | Beginner | Settings outside the image.
 @@ user You ; doc ConfigMap ; pod Pod ; key Secret
 = Without them | PROBLEM
-Settings inside the image: a new image for each environment.
+If the database address and log level are built into the image, you need a different image for test and production, and a password inside an image can be read by anyone who can pull it.
 = What they are | SOLUTION
-**ConfigMap** for plain settings, **Secret** for sensitive ones.
-= How it works
-Given to Pods as variables or files. Base64 in a Secret is not encryption; turn on encryption at rest.
+- A **ConfigMap** holds plain settings as key-value pairs or whole files.
+- A **Secret** holds sensitive values: passwords, tokens, certificates.
+Pods receive them as **environment variables** or as **files** in a mounted folder. The same image then runs everywhere with different settings.
+= Create them
+$ kubectl create configmap web-config --from-literal=LOG_LEVEL=info --from-file=app.properties
+- create configmap web-config = a ConfigMap named web-config
+- --from-literal=LOG_LEVEL=info = one key and value
+- --from-file=app.properties = a whole file as one key
+$ kubectl create secret generic db --from-literal=password='S3cure!'
+- create secret generic db = a general-purpose Secret named db
+- --from-literal=password='…' = the value; single quotes stop the shell from interpreting `!`
+= Use them in a Pod
+>     env:
+>     - name: LOG_LEVEL
+>       valueFrom: { configMapKeyRef: { name: web-config, key: LOG_LEVEL } }
+>     - name: DB_PASSWORD
+>       valueFrom: { secretKeyRef: { name: db, key: password } }
+- env = environment variables for the container
+- configMapKeyRef = take the value from a ConfigMap key
+- secretKeyRef = take the value from a Secret key
+`envFrom` loads every key at once; a `volume` with `configMap:` or `secret:` mounts them as files, which update without restarting the Pod.
+= Secrets are not encrypted by default
+$ kubectl get secret db -o jsonpath='{.data.password}' | base64 -d
+- -o jsonpath='{.data.password}' = print only that field
+- base64 -d = decode it
+Secret values are only **base64-encoded**, which anyone can decode. Protect them by:
+- turning on **encryption at rest** for etcd;
+- limiting who may read Secrets with RBAC;
+- or keeping real secrets in Vault or a cloud secret manager and syncing them in (External Secrets Operator).
 = Real-time example | PRACTICE
-The same image in test and production, with two ConfigMaps.
+The same image `web:1.4.0` runs in test and production. Only the ConfigMap (`LOG_LEVEL=debug` versus `info`) and the Secret (test versus real database password) differ. Promoting a version means changing one image tag, never rebuilding.
 ? Is base64 encryption? | Yes | *No | Sometimes
+^ https://kubernetes.io/docs/concepts/configuration/secret/ Kubernetes: Secrets
 
 # c-pvc | Volume, PV and PVC | Intermediate | Disks that follow Pods.
 @@ pod Pod ; card PVC ; db Disk ; gear StorageClass
 = Without it | PROBLEM
-The database Pod moves and its data stays behind.
+A database Pod writes to its container's file system. When the Pod is replaced or moved to another node, its data stays behind or is deleted.
 = What it is | SOLUTION
-A **claim** (PVC) asks for storage, a **volume** (PV) is the disk, a **StorageClass** makes it on demand.
-= How it works
-The Pod names the claim; the disk is attached where the Pod runs.
+- A **PersistentVolume** (PV) is a real piece of storage: a cloud disk, an NFS share.
+- A **PersistentVolumeClaim** (PVC) is a request: "I need 20 GiB of fast disk". Pods use claims, not disks directly.
+- A **StorageClass** describes a kind of storage and creates PVs automatically when a claim asks for one (**dynamic provisioning**).
+= A claim and a Pod that uses it
+> apiVersion: v1
+> kind: PersistentVolumeClaim
+> metadata: { name: pgdata }
+> spec:
+>   accessModes: [ReadWriteOnce]
+>   storageClassName: gp3
+>   resources: { requests: { storage: 20Gi } }
+- accessModes: [ReadWriteOnce] = one node may mount it read-write at a time (typical for cloud disks)
+- storageClassName: gp3 = which kind of storage
+- storage: 20Gi = how much
+In the Pod:
+>   volumes:
+>   - name: data
+>     persistentVolumeClaim: { claimName: pgdata }
+- persistentVolumeClaim.claimName = use this claim; then `volumeMounts` in the container chooses the path
+= Check storage
+$ kubectl get storageclass
+- get storageclass = available kinds of storage; one is marked default
+$ kubectl get pvc,pv
+- get pvc,pv = claims and volumes; a claim should be `Bound`
+$ kubectl describe pvc pgdata
+- describe pvc = if it stays `Pending`, the events say why (no StorageClass, no capacity, wrong zone)
+= Keep or delete?
+A StorageClass's **reclaimPolicy** decides what happens to the disk when the claim is deleted: `Delete` (the default for most clouds) removes the disk and its data; `Retain` keeps it.
+!! Deleting a PVC with reclaimPolicy `Delete` deletes the data. Back up databases with their own tools or volume snapshots.
 = Real-time example | PRACTICE
-A node fails. The database Pod starts on another, with the same disk attached.
+A node fails at night. Kubernetes starts the database Pod on another node in the same zone, the cloud disk is detached from the dead node and attached to the new one, and the database starts with all its data.
 ? Who asks for storage? | PV | *PVC | Node
-
-# c-kctl | kubectl and YAML | Beginner | How you speak to a cluster.
-@@ user You ; laptop kubectl ; gear API server ; doc YAML file
-= Without it | PROBLEM
-You would have to write raw HTTP requests.
-= What it is | SOLUTION
-**kubectl** sends your wish, usually written in a YAML file.
-= How it works
-| Field | Meaning |
-| apiVersion | Which API |
-| kind | What object |
-| metadata | Name, labels |
-| spec | What you wish |
-| status | What is, written by the cluster |
-$ kubectl apply -f web.yaml
-= Real-time example | PRACTICE
-All YAML is in Git, so a lost cluster can be rebuilt from files.
-? Your wish goes in... | status | *spec | logs
+^ https://kubernetes.io/docs/concepts/storage/persistent-volumes/ Kubernetes: persistent volumes

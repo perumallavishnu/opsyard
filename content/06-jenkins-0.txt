@@ -48,64 +48,180 @@ LTS 2.555.1 requires Java 21 or 25.
 # c-jkjob | Job and build | Beginner | What to do, and one time of doing it.
 @@ user Developer ; card Job ; server Agent ; doc Build #42
 = Without it | PROBLEM
-The steps live in someone's memory.
+The steps to build and release the product live in one person's memory or a wiki page that is out of date. Each run is a little different, and when it fails there is no record of what happened.
 = What it is | SOLUTION
-A **job** describes work. A **build** is one run of it with a number, a log and a result.
-= How it works
-Results: success, unstable (tests failed), failure, aborted. The **workspace** is the folder where it runs.
+- A **job** (also called a project or item) describes **what** to do: where the code is, which commands to run, when to start.
+- A **build** is **one run** of a job. Builds are numbered (#41, #42…) and each keeps its own console log, result, duration and any files it produced.
+- The **workspace** is the folder on the agent where a build checks out the code and runs.
+= Build results
+| Result | Colour | Means |
+| Success | Green | Every step finished without error |
+| Unstable | Yellow | It ran, but tests failed |
+| Failure | Red | A step exited with an error, or compilation failed |
+| Aborted | Grey | Someone stopped it, or a timeout hit |
+| Not built | Grey | Skipped, for example an earlier stage failed |
+Jenkins decides from **exit codes**: a shell step that returns anything but 0 marks the build as failed.
+= Read a build
+Open a build and choose **Console Output**. It shows each command and its output in order:
+> + npm ci
+> added 812 packages in 14s
+> + npm test
+> FAIL src/cart.test.js
+- + npm ci = the `+` marks a command Jenkins ran in the shell
+- FAIL … = the tool's own output, here a failed test file
+**Changes** lists the commits since the previous build, so you know what is new in this run.
+= Start and inspect from the command line
+$ curl -X POST -u ana:API_TOKEN https://jenkins.acme.io/job/shop/build
+- curl -X POST = send a POST request; Jenkins starts builds on POST
+- -u ana:API_TOKEN = your user and an API token (create it under your user, Security). Never your password
+- /job/shop/build = the URL to start job `shop`
+$ curl -u ana:API_TOKEN https://jenkins.acme.io/job/shop/lastBuild/api/json
+- /lastBuild/api/json = details of the latest build as JSON, including `result`
 = Real-time example | PRACTICE
-Build 41 was green, 42 is red. The difference between them is three commits, so the cause is easy to find.
+Build #41 was green, #42 is red. The **Changes** page of #42 lists three commits. One of them updated a library. The team reverts that commit, #43 is green again, and the library update is retried with the needed code change the next day.
 ? One run of a job is a... | plugin | *build | node
+^ https://www.jenkins.io/doc/book/glossary/ Jenkins glossary
 
 # c-jkplugin | Plugins | Beginner | Adding abilities.
 @@ user Admin ; box Plugin ; gear Jenkins ; cloud Other tools
 = Without them | PROBLEM
-Jenkins itself knows little: no Git, no Docker, no chat.
+Jenkins itself is a small core. Out of the box it cannot fetch code from Git, build containers, talk to Kubernetes or send a chat message.
 = What they are | SOLUTION
-Small packages that add features: Git, Pipeline, Credentials, Kubernetes, JUnit.
-= How it works
-Install from the plugin manager, restart if needed, and read security advisories.
+**Plugins** are packages that add features. Almost everything you use is a plugin:
+| Plugin | Adds |
+| Git | Checking out Git repositories |
+| Pipeline | Jenkinsfiles and pipeline jobs |
+| Credentials, Credentials Binding | Storing secrets and using them in builds |
+| JUnit | Reading test reports and showing trends |
+| Docker Pipeline | Running steps inside containers |
+| Kubernetes | Starting build agents as pods |
+| Configuration as Code | Setting up Jenkins from YAML |
+There are more than 1,800 plugins, written by many different people.
+= Install and update
+**Manage Jenkins, Plugins**: the **Available** tab to install, **Updates** to update, **Installed** to disable or remove. Some changes need a restart.
+With the command-line client:
+$ java -jar jenkins-cli.jar -s https://jenkins.acme.io/ -auth ana:API_TOKEN install-plugin git -restart
+- java -jar jenkins-cli.jar = run the Jenkins CLI (download it from your Jenkins at `/jnlpJars/jenkins-cli.jar`)
+- -s … = which Jenkins server
+- -auth ana:API_TOKEN = user and API token
+- install-plugin git = install the Git plugin and its dependencies
+- -restart = restart Jenkins afterwards if needed
+= The cost of plugins
+Every plugin is code running inside your Jenkins, with access to its secrets.
+- Plugins depend on each other; one update can require others.
+- Some plugins are abandoned and stop receiving security fixes.
+- Jenkins publishes **security advisories**; the Updates page warns about affected plugins.
+! Keep a short list of plugins you really use, update them on a schedule, and try updates on a copy of Jenkins first.
 = Real-time example | PRACTICE
-A team had 140 plugins and an update broke half. They now keep 35 and test updates on a copy first.
+A team had installed 140 plugins over the years. One update broke half the jobs on a Monday morning. They removed everything unused, kept 35, and now test updates every two weeks on a staging Jenkins built from the same configuration. Outages from updates stopped.
 ? More plugins mean... | more speed | *more to maintain | no risk
+^ https://plugins.jenkins.io/ Jenkins plugin index
 
 # c-jknode | Controller, node, executor | Beginner | Who plans and who works.
 @@ gear Controller ; queue Queue ; server Node ; card Executor
 = Without nodes | PROBLEM
-All builds on one machine: slow, and one project's tools break another's.
+If every build runs on the one Jenkins machine, builds wait in line, one project's tools (Java 21, Node 24, Python 3.12) clash with another's, and a build that fills the disk takes down Jenkins itself.
 = What they are | SOLUTION
-The **controller** plans, **nodes** (agents) work, an **executor** is one slot on a node.
-= How it works
-A job asks for a **label** such as `linux && docker`. The queue waits until a matching executor is free.
+- The **controller** is the Jenkins server: it stores configuration, shows the web page, keeps the **build queue** and decides where builds run. It should not run builds itself.
+- A **node** is any machine that can run builds; a node other than the controller is called an **agent**.
+- An **executor** is one build slot on a node. A node with 2 executors runs 2 builds at once.
+- A **label** is a tag on nodes, like `linux`, `docker` or `mac`, used to choose where a job runs.
+= Choose a node with labels
+> pipeline {
+>   agent { label 'linux && docker' }
+>   stages { stage('Build') { steps { sh 'docker build .' } } }
+> }
+- agent { label 'linux && docker' } = run on any node that has **both** labels
+- `||` = either label; `!windows` = any node without that label
+If no matching executor is free, the build waits in the queue until one is.
+= Connect an agent
+**Manage Jenkins, Nodes, New Node**: give it a name, number of executors, a remote folder and labels. Then choose how it connects:
+- **SSH**: the controller logs in to the agent and starts the agent program.
+- **Inbound**: the agent connects to the controller, useful when the agent is behind a firewall:
+$ java -jar agent.jar -url https://jenkins.acme.io/ -secret 3f9a… -name build-01 -workDir /home/jenkins
+- agent.jar = the agent program, downloaded from your Jenkins
+- -url = the controller's address
+- -secret = this node's secret, shown on its page
+- -name build-01 = the node's name in Jenkins
+- -workDir = where the agent keeps workspaces
 = Real-time example | PRACTICE
-Four nodes with two executors run eight builds at once. A Mac node with the label `mac` builds the phone app.
+A team has four Linux agents with two executors each, so eight builds run at once. A Mac mini with the label `mac` builds only the iPhone app. The controller itself has 0 executors, so a broken build can never fill its disk or slow down the web page.
 ? A label is used to... | name a build | *choose a node | store a password
+^ https://www.jenkins.io/doc/book/managing/nodes/ Jenkins: managing nodes
 
 # c-jkcred | Credentials and webhooks | Beginner | Keys kept safe, and instant starts.
 @@ cloud GitHub ; flag Webhook ; gear Jenkins ; key Credentials
 = Without them | PROBLEM
-Jenkins asks the code host every minute "anything new?", with a password written in the job.
+Jenkins asks GitHub every minute "anything new?" (polling), wasting requests and starting builds late. And the password to fetch the code is typed into the job's settings, where every user of Jenkins can read it.
 = What they are | SOLUTION
-A **webhook** is a message from the host at each push. **Credentials** are stored encrypted and used by ID.
-= How it works
-Push, webhook, matching job starts. The job borrows a credential only for the step that needs it.
+- A **webhook** is a message the code host sends to Jenkins the moment something happens, such as a push. Jenkins starts the matching job within seconds.
+- **Credentials** are secrets (passwords, tokens, SSH keys, certificates) stored **encrypted** in Jenkins. Jobs refer to them by an **ID**, never by value.
+= Set up a GitHub webhook
+In the GitHub repository: **Settings, Webhooks, Add webhook**.
+> Payload URL:   https://jenkins.acme.io/github-webhook/
+> Content type:  application/json
+> Events:        Just the push event
+- Payload URL = the address of Jenkins' GitHub endpoint; the trailing `/` matters
+- Content type = the format of the message
+- Events = which events should call Jenkins
+Then enable "GitHub hook trigger" in the job, or use a Multibranch job, which reacts to webhooks automatically.
+= Add a credential
+**Manage Jenkins, Credentials, (global), Add Credentials**. Choose the kind:
+| Kind | For |
+| Username with password | Registry logins, simple HTTP auth |
+| Secret text | API tokens |
+| SSH username with private key | Git over SSH, SSH agents |
+| Secret file | kubeconfig files, certificates |
+Give each a clear **ID** such as `github-token` or `npm-token`; jobs will use that ID.
+= Use it in a pipeline
+> withCredentials([usernamePassword(credentialsId: 'registry', usernameVariable: 'U', passwordVariable: 'P')]) {
+>   sh 'echo "$P" | docker login -u "$U" --password-stdin registry.acme.io'
+> }
+- withCredentials = make a credential available only inside these braces
+- usernamePassword(…) = the kind of credential
+- credentialsId: 'registry' = which stored credential, by ID
+- usernameVariable / passwordVariable = environment variable names the values are put in
+- --password-stdin = read the password from input instead of the command line, so it never appears in the process list
+Jenkins replaces the values with `****` if they appear in the log.
 = Real-time example | PRACTICE
-Builds start two seconds after a push instead of up to five minutes later.
+After switching from polling every five minutes to webhooks, builds start two seconds after a push. Developers get test results while still thinking about the change, and Jenkins sends 99% fewer requests to GitHub.
 ? A webhook is sent by... | the tester | *the code host | the database
+^ https://www.jenkins.io/doc/book/using/using-credentials/ Jenkins: using credentials
 
 # c-jkpipe | Pipeline words | Beginner | Pipeline, stage, step, agent, post.
 @@ doc Jenkinsfile ; gear Pipeline ; rack Server ; shield Stages
 = Without it | PROBLEM
-Clicking through forms: no history, no review, no copy.
+A job configured by clicking through forms has no history and no review. Nobody can see who changed a step last week, it cannot be copied to another project easily, and if the server dies the setup is gone.
 = What it is | SOLUTION
-A pipeline is text in a **Jenkinsfile** next to the code.
-= How it works
+A **pipeline** describes the whole process as code, in a text file named **`Jenkinsfile`** stored in the application's repository. It is reviewed in pull requests and versioned with the code it builds.
 | Word | Meaning |
-| agent | Where to run |
-| stage | A named part |
-| step | One action |
-| when | Condition |
-| post | What to do at the end |
+| `pipeline` | The whole definition |
+| `agent` | Where it runs: any node, a label, or a container |
+| `stages` / `stage` | Named phases, shown as columns in the UI |
+| `steps` | The commands inside a stage |
+| `environment` | Variables for all steps |
+| `when` | A condition to run a stage |
+| `post` | What to do at the end, depending on the result |
+= A complete small Jenkinsfile
+> pipeline {
+>   agent { label 'linux' }
+>   environment { NODE_ENV = 'test' }
+>   stages {
+>     stage('Install') { steps { sh 'npm ci' } }
+>     stage('Test')    { steps { sh 'npm test' } }
+>   }
+>   post { failure { echo 'Build failed' } }
+> }
+- agent { label 'linux' } = run on a node labelled linux
+- environment { NODE_ENV = 'test' } = every step sees this variable
+- stage('Install') = a phase with a name of your choice
+- sh 'npm ci' = run a shell command on the agent (`bat` on Windows agents)
+- post { failure { … } } = run only if the pipeline failed
+= Declarative and scripted
+- **Declarative** (`pipeline { … }`): a fixed structure that Jenkins checks before running. Easier to read; use it by default.
+- **Scripted** (`node { … }`): free Groovy code. More power, more ways to make mistakes.
+Use the built-in **Pipeline Syntax** page (the "Snippet Generator") in any pipeline job to generate correct code for a step.
 = Real-time example | PRACTICE
-The server dies. A new Jenkins reads the same Jenkinsfiles and works the same day.
+The Jenkins server's disk fails. The team starts a new Jenkins from their configuration-as-code file and points it at their repositories. Every project's Jenkinsfile is still in Git, so all pipelines work again the same afternoon, exactly as before.
 ? Where should the Jenkinsfile live? | On a laptop | *In the code repository | In email
+^ https://www.jenkins.io/doc/book/pipeline/syntax/ Jenkins: pipeline syntax

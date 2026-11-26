@@ -11,26 +11,36 @@
 + a b m
 ~ !a>m 3 weeks ;; !b>m 3 weeks
 : m err conflicts
-Two people work apart for weeks and merge at the end. Conflicts and surprises arrive together.
+Ana and Ben each work alone on a branch for three weeks. On "integration day" they merge. Hundreds of lines conflict, the code compiles but behaves strangely, and nobody can tell which of the hundred changes caused which problem. Integration takes longer than the work.
 = Merge daily | SOLUTION
 ~ a>m small ;; b>m small
 : m ok healthy
-Continuous integration means everyone merges to the shared branch at least daily.
+**Continuous integration** (CI) means everyone merges small changes into the shared branch at least once a day. Each merge is small, so conflicts are small, and if something breaks, the cause is one of a few recent changes.
+Unfinished features are hidden behind feature flags rather than kept on long branches.
 = Build on a clean machine
 + p
 ~ m>p trigger
-"Works on my machine" ends when a fresh machine builds every change from the repository alone.
-= Test
+Every push triggers a build on a **fresh machine** that has nothing but the repository. If the build needs a file that only exists on Ana's laptop, it fails at once.
+"It works on my machine" stops being an excuse: the CI machine is the reference.
+= Test every change
 + t
 ~ p>t
-Run fast tests first. A pipeline under about ten minutes keeps people merging in small pieces.
+After building, the CI server runs the automated tests and reports back, usually on the pull request:
+- green: safe to merge;
+- red: the log shows exactly which test failed and why.
+Keep the whole run under about ten minutes. When CI takes an hour, people stop waiting for it and start merging bigger batches, which brings integration day back.
 = Red means stop
 ~ !t>m failed
 : m err red
 * m
-When main is red, fixing or reverting it comes before new work.
-! CI is a habit supported by a server. A server without the habit is only a build machine.
+When `main` is red, it is the team's top priority. Either fix it within minutes or **revert** the change that broke it:
+$ git revert 3f9a2c1
+$ git push
+- git revert 3f9a2c1 = add a commit that undoes the breaking commit, keeping history
+Never "temporarily" disable the failing test: it will stay disabled.
+! CI is a habit, supported by a server. A server without the habit is only a build machine.
 ? What should the team do when main turns red? | Wait for night build | *Fix or revert first | Disable the test
+^ https://martinfowler.com/articles/continuousIntegration.html Martin Fowler: Continuous Integration
 
 # test-pyramid | Testing in the pipeline | Beginner | Many fast tests, few slow ones.
 @ u layer 0 0 Unit
@@ -38,30 +48,50 @@ When main is red, fixing or reverting it comes before new work.
 @ c layer 1 1 Contract
 @ e layer 2 0 End to end
 @ g gate 3 0 Quality gate
-= Unit
+= Unit tests: the wide base
 + u
-A unit test checks one function in isolation. Milliseconds each, thousands of them.
-= Integration
+A **unit test** checks one function or class in isolation, with fake versions of the database or network. Each takes milliseconds, so a project can have thousands and still run them all in a minute.
+> test('total includes tax', () => {
+>   expect(total({ price: 100, tax: 0.18 })).toBe(118);
+> });
+- total(…) = the function under test, called with a known input
+- toBe(118) = the expected result; anything else fails the test
+= Integration tests
 + i
 ~ u>i
-Integration tests check that parts work together: code with a real database in a container.
-= End to end
+**Integration tests** check that real parts work together: your code with a real database, a real message queue. A container can start a throwaway database for the test:
+$ docker run -d --rm -p 5432:5432 -e POSTGRES_PASSWORD=test postgres:16
+- -d = run in the background; --rm = delete it when it stops
+- -p 5432:5432 = make its port reachable from the test
+- -e POSTGRES_PASSWORD=test = a setting the image needs
+- postgres:16 = the image and version
+= End-to-end tests: the narrow top
 + e
 ~ i>e
-A browser clicks through the real system. Realistic, slow, easy to break. Keep few, for the most important journeys.
-= Contract
+**End-to-end** (E2E) tests drive a real browser through the real system: open the shop, search, add to cart, pay. They are the most realistic, but slow (minutes) and fragile: a moved button can break them.
+Keep a small number, for the journeys that make money or would be a disaster if broken: sign up, log in, pay.
+$ npx playwright test
+- npx playwright test = run Playwright's browser tests
+= Contract tests
 + c
 * c
-Contract tests check that a service still answers the way its consumers expect, without starting them all.
-= Static checks and gate
+Service A calls service B. A **contract test** records what A expects from B (fields, types, status codes) and checks B against it, without starting both systems together. If B's team renames a field, their pipeline fails before A breaks in production.
+= Static checks and the quality gate
 + g
 ~ e>g
 : g ok open
-Linting, type checks, dependency and secret scans cost seconds. A **quality gate** stops the pipeline when a rule fails.
+Checks that do not run the code cost only seconds:
+- **lint**: style and common mistakes (`eslint`, `ruff`);
+- **type checks** (`tsc`);
+- **dependency scan**: known vulnerabilities in libraries;
+- **secret scan**: passwords or keys in the code.
+A **quality gate** is a rule the pipeline enforces, such as "no high vulnerabilities" or "coverage not lower than before". If a rule fails, the pipeline stops.
 = Flaky tests | RISK
 : e warn flaky
-A test that fails at random teaches people to ignore red. Quarantine it, fix it or delete it.
+A **flaky** test sometimes passes and sometimes fails with no code change, often because of timing, shared data or the network. Soon people say "just re-run it" and ignore red, including real failures.
+Treat a flaky test as a bug: move it out of the required checks (quarantine), fix it within days, or delete it.
 ? Which tests should be the most numerous? | End to end | *Unit | Manual
+^ https://martinfowler.com/articles/practical-test-pyramid.html The practical test pyramid
 
 ## Delivery
 # artifact | Build once, promote everywhere | Intermediate | One artifact travels through every environment.
@@ -74,23 +104,35 @@ A test that fails at random teaches people to ignore red. Quarantine it, fix it 
 = Rebuilding per environment | PROBLEM
 + b d p
 ~ b>d build 1 ;; !b>p build 2
-If you build again for production, you deploy something nobody tested.
+If you build again for production, you deploy something that nobody tested. A library may have released a new version in between, or the build machine may differ. "It worked in staging" no longer means anything.
 = One artifact | SOLUTION
 + r
 ~ b>r v1.8.2 ;; r>d same
-Build once, give it an immutable version or digest, store it in a registry.
-= Promote
+Build **once**, give the result a unique version, and store it in a registry:
+$ docker build -t registry.acme.io/shop:1.8.2 .
+$ docker push registry.acme.io/shop:1.8.2
+- registry.acme.io/shop = where the image lives and its name
+- :1.8.2 = the version tag; never reused for different content
+The image's **digest** (`sha256:…`) identifies the exact bytes even if a tag is moved.
+= Promote the same artifact
 + s
 ~ r>s same ;; r>p same
-Promotion moves **that same artifact** forward after each environment passes.
+**Promotion** means moving that same artifact to the next environment once the current one passes its checks: dev, then staging, then production. Nothing is rebuilt; only the version number in the deployment changes.
+$ kubectl set image deployment/shop shop=registry.acme.io/shop:1.8.2
+- set image = change which image a Kubernetes Deployment runs
+- shop=… = container name, then the image to use
 = Configuration stays outside
 + c
 ~ c>s settings ;; c>p settings
-Database URLs and feature switches differ per environment and are injected when it starts. Secrets come from a secret store.
+What differs per environment (database address, API keys, feature switches) is **not** built into the artifact. It is given when the program starts, through environment variables, mounted config files or a config service. Secrets come from a secret store, never from the image.
 = Delivery or deployment?
 : p info approve
-**Continuous delivery**: every change is ready, a person decides when. **Continuous deployment**: every change that passes goes live automatically.
+| | Continuous delivery | Continuous deployment |
+| Every change is tested and ready to release | Yes | Yes |
+| Who decides to release | A person presses a button | Nobody: it goes live automatically |
+| Good for | Regulated work, planned launches | Teams with strong tests and monitoring |
 ? Why not rebuild for production? | It costs money | *The result may differ from what was tested | Registries forbid it
+^ https://continuousdelivery.com/ Continuous Delivery
 
 # deploy-strategies | Deployment strategies | Intermediate | Recreate, rolling, blue-green, canary and flags.
 @ u team 0 1 Users
@@ -104,30 +146,49 @@ Database URLs and feature switches differ per environment and are injected when 
 : v1 off stopped
 : v1b off stopped
 ~ !u>lb error
-Stop everything old, start the new. Simple, with downtime.
+**Recreate:** stop every old instance, then start the new ones. Simple, and old and new never run together. But users see errors or a maintenance page until the new version is up. Fine for internal tools at night; not for a shop.
 = Rolling
 + v2
 : v2 ok ready
 ~ u>lb ;; lb>v1 ;; lb>v2
-Replace instances a few at a time. Both versions run together, so they must be compatible.
+**Rolling:** replace instances a few at a time. Start one new instance, wait until it is healthy, remove one old one, repeat. No downtime and no extra servers.
+For a while **both versions serve users**, so they must work with the same database and the same APIs. This is Kubernetes' default:
+> strategy:
+>   rollingUpdate:
+>     maxSurge: 1
+>     maxUnavailable: 0
+- maxSurge: 1 = at most one extra instance during the update
+- maxUnavailable: 0 = never have fewer healthy instances than wanted
 = Blue-green
 ~ u>lb ;; lb>v2 switch all
 : v2 ok live
 : v1 off idle
-Run a full second environment, test it, switch all traffic at once. Rollback is switching back. Costs double for a while.
+**Blue-green:** run a complete second environment ("green") with the new version beside the live one ("blue"). Test green privately, then switch **all** traffic at once at the load balancer.
+- Rollback = switch back, in seconds.
+- Cost = double the servers for a while.
 = Canary
 ~ lb>v1 95% ;; lb>v2 5%
 : v2 warn watching
-Send a small share to the new version, compare error rate and latency, widen or stop.
+**Canary:** send a small share of users, say 5%, to the new version. Compare its error rate and response time with the old version. If it is as good, widen to 25%, 50%, 100%. If not, send everyone back. A bad release hurts only a few users for a few minutes.
+The name comes from canaries that miners took underground to warn of gas.
 = Feature flags
 * v2
 ~ u>lb flag on
-Deploying code and releasing a feature become separate. Turn it on for staff, then 10%, then all. Remove old flags.
+A **feature flag** is a switch in the code:
+> if (flags.isOn('new-checkout', user)) showNewCheckout(); else showOldCheckout();
+- flags.isOn('new-checkout', user) = asks a flag service whether this feature is on for this user
+Now **deploying** code and **releasing** a feature are separate decisions. Deploy any time with the flag off; turn it on for staff, then 10% of users, then everyone. If something goes wrong, turn the flag off, no deployment needed. Remove flags once a feature is fully released.
 = Database changes | RISK
 : v1b warn old schema
-Use **expand and contract**: add the new column, write both, move data, read new, and only later drop the old one.
+During rolling, canary and rollback, old and new code use the same database. Use **expand and contract**:
+1. Expand: add the new column; the old one stays.
+2. Release code that writes both columns.
+3. Copy old data into the new column.
+4. Release code that reads only the new column.
+5. Contract: in a later release, drop the old column.
 !! Dropping a column while the old version still runs breaks it, and breaks rollback too.
 ? Which strategy sends 5% of traffic first? | Blue-green | *Canary | Recreate
+^ https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy Kubernetes: Deployment strategy
 
 # gitops | GitOps | Advanced | Git holds the desired state; an agent makes it real.
 @ d laptop 0 0 Developer
@@ -138,25 +199,47 @@ Use **expand and contract**: add the new column, write both, move data, read new
 = Pushing from CI | PROBLEM
 + d g k
 ~ !d>k cluster admin key
-If the pipeline pushes into the cluster, it holds powerful credentials, and nobody knows whether the cluster still matches Git.
+In a classic pipeline, the CI server runs `kubectl apply` against production. That means the CI system holds a powerful key to the cluster, and anyone who compromises CI controls production. And after a few manual fixes, nobody knows whether the cluster still matches what is in Git.
 = Pull instead | SOLUTION
 + a
 ~ d>g merge ;; a>g watch ;; a>k apply
-An agent inside the cluster, such as **Argo CD** or **Flux**, watches Git and applies changes.
-= Four principles
+In **GitOps**, a Git repository describes the desired state of the system (which images, how many copies, which settings). An agent running **inside** the cluster, such as **Argo CD** or **Flux**, watches that repository and applies any change.
+- CI builds and pushes the image, then only updates a version number in Git.
+- No cluster key leaves the cluster.
+= The four principles
 * g
-Desired state is **declarative**, **versioned and immutable**, **pulled automatically**, and **continuously reconciled**.
-= Drift
+OpenGitOps defines four principles:
+- **Declarative**: you describe what you want, not the steps to get there.
+- **Versioned and immutable**: the desired state is stored in Git, with full history.
+- **Pulled automatically**: agents fetch the desired state themselves.
+- **Continuously reconciled**: agents keep comparing reality with Git and correct differences.
+= Working with Argo CD
+$ argocd app create shop --repo https://github.com/acme/deploy.git --path apps/shop --dest-server https://kubernetes.default.svc --dest-namespace shop
+- app create shop = register an application named `shop`
+- --repo / --path = where in Git its manifests live
+- --dest-server / --dest-namespace = which cluster and namespace to deploy into
+$ argocd app sync shop
+- app sync = apply what Git says now, without waiting for the next automatic check
+$ argocd app get shop
+- app get = show whether it is Synced or OutOfSync, and Healthy or not
+= Drift and self-heal
 + x
 ~ !x>k edit ;; a>k revert
 : k warn out of sync
-With self-heal on, a manual change is returned to what Git says. Without it, the drift is reported.
-= Rollback
+Someone changes the cluster by hand with `kubectl edit`. The cluster now **drifts** from Git. With **self-heal** turned on, the agent changes it back within minutes. Without it, the app shows "OutOfSync" so the team notices.
+Either way, the rule becomes: to change production, change Git.
+= Rollback is a revert
 ~ d>g git revert ;; a>k sync
-Rolling back is reverting a commit. The history of production is the Git log.
+$ git revert 7c1e2aa
+$ git push
+- git revert 7c1e2aa = undo the commit that changed the image version
+The agent sees the change and deploys the previous version. The Git log is now an exact history of production: who changed what, when, and who approved the pull request.
 = Secrets
 * g
-Never commit plain secrets. Use Sealed Secrets, SOPS or External Secrets.
+Plain secrets must never be committed, even to a private repository. Common tools:
+- **Sealed Secrets**: encrypt a secret so only the cluster can decrypt it;
+- **SOPS**: encrypt values inside YAML files with a cloud key;
+- **External Secrets Operator**: keep secrets in Vault or a cloud secret manager and copy them into the cluster.
 ? Who applies changes in GitOps? | The CI job | *An agent that pulls from Git | The developer
 ^ https://opengitops.dev/ OpenGitOps principles
 ^ https://argo-cd.readthedocs.io/ Argo CD docs

@@ -59,103 +59,300 @@ Docker Engine 29 uses the containerd image store by default on fresh installs.
 ? Which year was Docker shown? | 2008 | *2013 | 2017
 
 ## Parts of Docker
+# c-dkinstall | Install Docker and run your first container | Beginner | From nothing to "hello" in five minutes.
+@@ user You ; gear Docker Engine ; laptop Your computer ; box hello-world
+= Without it | PROBLEM
+Without Docker installed, the `docker` command does not exist. And trying a database or a tool normally means a long installation that leaves files all over your system.
+= What it is | SOLUTION
+- **Docker Engine** is the background service (the daemon, `dockerd`) that builds and runs containers. It runs on Linux.
+- The **docker CLI** is the command you type; it sends your requests to the engine.
+- **Docker Desktop** packages both for Windows and macOS, with a small Linux virtual machine inside, because containers need a Linux kernel.
+= Install
+On Windows or macOS, install **Docker Desktop** from docker.com and start it. On Ubuntu, Docker's official script is the quickest way for a test machine:
+$ curl -fsSL https://get.docker.com -o get-docker.sh
+- curl = download from the web
+- -f = fail on server errors; -s = silent; -S = still show errors; -L = follow redirects
+- -o get-docker.sh = save it to this file
+$ sudo sh get-docker.sh
+- sh get-docker.sh = run the script; it adds Docker's package repository and installs the engine
+For servers, follow the step-by-step apt instructions on docs.docker.com instead, so you know what changed.
+= Use it without sudo
+$ sudo usermod -aG docker $USER
+- usermod -aG docker = add a user to the `docker` group
+- $USER = your own user name
+Log out and back in for it to take effect.
+!! Members of the `docker` group can control the daemon, which runs as root. That is effectively root access to the machine; add only people who should have it.
+= Your first container
+$ docker run hello-world
+- docker run = create and start a container from an image
+- hello-world = a tiny test image; Docker downloads it from Docker Hub because it is not on your machine yet
+> Unable to find image 'hello-world:latest' locally
+> latest: Pulling from library/hello-world
+> Hello from Docker!
+The container printed its message and exited. Now check versions:
+$ docker version
+- docker version = versions of the client and of the engine; if "Server" is missing, the engine is not running
+= Something useful
+$ docker run --rm -it ubuntu:24.04 bash
+- --rm = delete the container when it exits
+- -i = keep input open; -t = give it a terminal; together `-it` lets you type inside
+- ubuntu:24.04 = image and version
+- bash = the command to run inside, instead of the image's default
+You are now in a clean Ubuntu, isolated from your computer. Try things, type `exit`, and it is gone.
+= Real-time example | PRACTICE
+A student needs PostgreSQL for one assignment. Instead of installing it, she runs one `docker run` command, uses it for a week, then deletes it with `docker rm -f`. Her laptop is exactly as clean as before.
+? Why does Docker Desktop include a small Linux virtual machine? | For games | *Containers need a Linux kernel | To store images online
+^ https://docs.docker.com/engine/install/ Docker: install Docker Engine
+
 # c-image | Image | Beginner | The frozen recipe result.
 @@ doc Dockerfile ; stack Image ; box Containers ; layer Layers
 = Without it | PROBLEM
-Installing by hand on each server, never exactly the same.
+Each server is set up by hand: install the language, the libraries, copy the code, set the configuration. No two servers end up exactly the same, and rebuilding one takes a day.
 = What it is | SOLUTION
-A read-only package with the app, libraries and settings. Many containers can start from one image.
-= How it works
-It is made of **layers**. Layers are shared, so ten images on the same base store it once.
+An **image** is a read-only package that contains everything a program needs to run: a minimal operating system layer, the language runtime, libraries, the application code and default settings.
+- Running an image creates a **container**. One image can start many containers.
+- Running a container never changes its image.
+- Images are built from a **Dockerfile** and stored in a **registry**.
+= Layers
+An image is a stack of **layers**. Each instruction in the Dockerfile that changes files adds one layer.
+- Layers are shared. Ten images based on `node:24-slim` store that base only once on disk and download it only once.
+- When you rebuild, unchanged layers are reused from the cache, so builds are fast.
+$ docker history nginx:1.28
+- docker history = list an image's layers, the instruction that created each one and its size
+= Work with images
 $ docker image ls
+- image ls = list images on this machine: repository, tag, ID, size
+$ docker pull nginx:1.28
+- pull = download an image from a registry without running it
+- nginx:1.28 = name and tag (version)
+$ docker image rm nginx:1.28
+- image rm = delete a local image (it fails if a container still uses it)
+$ docker image prune
+- prune = delete "dangling" images: old layers no tag points to any more. Add `-a` to remove every unused image
+= Image names in full
+> ghcr.io/acme/shop:1.8.2
+- ghcr.io = the registry; if left out, Docker Hub (`docker.io`) is assumed
+- acme = the owner or organisation; official images on Docker Hub use `library`
+- shop = the repository (image name)
+- 1.8.2 = the tag; if left out, `latest` is assumed
 = Real-time example | PRACTICE
-A bank keeps one approved base image. When it is patched, all forty apps are rebuilt on it overnight.
+A bank keeps one approved base image with security settings. When a vulnerability is fixed in that base, their pipeline rebuilds all forty applications on the new base overnight. In the morning every service runs the patched version, without anyone touching a server.
 ? Is an image changed by running it? | Yes | *No, it is read-only | Only at night
+^ https://docs.docker.com/get-started/docker-concepts/the-basics/what-is-an-image/ Docker: what is an image
 
 # c-container | Container | Beginner | A running image.
 @@ stack Image ; box Container ; team Users ; gauge Limits
 = Without it | PROBLEM
-Two apps on one server fight over ports, libraries and memory.
+Two applications on one server need different versions of the same library, both want port 80, and one uses all the memory. Fixing one breaks the other.
 = What it is | SOLUTION
-A process with its own view of files, network and processes, made from an image.
-= How it works
-Create, start, stop, remove. Changes inside disappear with it unless stored in a volume.
-$ docker run -d --name web -p 8080:80 nginx
+A **container** is a running instance of an image: an ordinary process on the host that has
+- its **own view** of the file system, processes and network (so it cannot see other containers);
+- **limits** on CPU and memory, if you set them;
+- a thin **writable layer** on top of the image for files it creates.
+It shares the host's kernel, so it starts in about a second and uses little memory.
+= Run a container
+$ docker run -d --name web -p 8080:80 nginx:1.28
+- docker run = create and start a container
+- -d = detached: run in the background and give the prompt back
+- --name web = a name to use in later commands instead of the random ID
+- -p 8080:80 = publish: port 8080 on your computer forwards to port 80 inside the container
+- nginx:1.28 = the image to start
+Open `http://localhost:8080` and the nginx welcome page appears.
+= Manage it
+$ docker ps
+- ps = running containers; `docker ps -a` also shows stopped ones
+$ docker logs -f web
+- logs -f = what the program printed, and keep following new lines
+$ docker exec -it web sh
+- exec -it web sh = open a shell inside the running container, to look around
+$ docker stop web
+- stop = ask the program to exit (SIGTERM), force it after 10 seconds
+$ docker rm web
+- rm = delete the stopped container. `docker rm -f web` stops and deletes in one step
+= Containers are disposable
+Anything a container writes to its own writable layer disappears when the container is removed. That is intentional: you replace containers instead of repairing them. Data that must survive goes into a **volume**.
 = Real-time example | PRACTICE
-A developer runs three versions of a database side by side to test an upgrade, then deletes them in a second.
+Before upgrading the company database from version 16 to 18, a developer runs both versions side by side in two containers on her laptop, loads a copy of the data into each, and compares the results. When she is done, `docker rm -f` removes both in a second.
 ? Data inside a removed container... | stays | *is gone unless in a volume | is emailed
+^ https://docs.docker.com/get-started/docker-concepts/the-basics/what-is-a-container/ Docker: what is a container
 
 # c-registry | Registry, repository, tag | Beginner | Where images are stored and named.
 @@ user Developer ; cloud Registry ; server Servers ; card Tag
 = Without it | PROBLEM
-Images are copied between machines on USB sticks.
+Images built on one machine would have to be copied to every server by hand, and nobody would know which file is which version.
 = What it is | SOLUTION
-A **registry** (Docker Hub, GHCR, ECR) stores **repositories** of images. A **tag** names a version.
-= How it works
-$ docker pull nginx:1.28
-$ docker push ghcr.io/acme/shop:1.0
-A tag can be moved; a **digest** (`sha256:...`) cannot.
+- A **registry** is a server that stores images: Docker Hub, GitHub Container Registry (ghcr.io), Amazon ECR, Google Artifact Registry, or your own Harbor.
+- A **repository** is one image name in a registry, holding many versions, such as `acme/shop`.
+- A **tag** names one version: `acme/shop:1.8.2`.
+- A **digest** (`sha256:4a1f…`) is calculated from the image's content and identifies it exactly.
+= Log in, tag, push
+$ docker login ghcr.io
+- login ghcr.io = sign in to that registry; for GitHub use a personal access token as the password
+$ docker tag shop:1.8.2 ghcr.io/acme/shop:1.8.2
+- docker tag = give an existing local image an additional name
+- ghcr.io/acme/shop:1.8.2 = the full name, including registry, needed to push there
+$ docker push ghcr.io/acme/shop:1.8.2
+- push = upload the image; only layers the registry does not have yet are sent
+= Pull on a server
+$ docker pull ghcr.io/acme/shop:1.8.2
+$ docker pull ghcr.io/acme/shop@sha256:4a1f9c…
+- @sha256:… = pull by digest: guaranteed to be exactly the image that was tested
+= Tags can move
+A tag is only a label. Someone can push a different image under the same tag, and `latest` changes every time a new version is pushed.
+| Reference | Can it change? | Use for |
+| `shop:latest` | Yes, often | Quick local experiments only |
+| `shop:1.8.2` | Possible, should not | Normal deployments, with immutable tags turned on |
+| `shop@sha256:…` | Never | Production when you need certainty |
 = Real-time example | PRACTICE
-"latest" changed on Friday and broke a server restart on Sunday. Now they pin versions.
+A server ran `postgres:latest`. On Friday a new major version was published under `latest`. On Sunday the server rebooted, pulled the new image, and the database refused to start with the old data files. Since then the team pins exact versions and upgrades on purpose.
 ? Which never changes meaning? | latest | a tag | *a digest
+^ https://docs.docker.com/get-started/docker-concepts/the-basics/what-is-a-registry/ Docker: what is a registry
 
 # c-dfile | Dockerfile | Beginner | The recipe for an image.
 @@ user Developer ; doc Dockerfile ; stack Image ; gear BuildKit
 = Without it | PROBLEM
-Nobody remembers how the image was made.
+If an image is made by starting a container, installing things by hand and saving the result, nobody knows exactly what is inside or how to make it again.
 = What it is | SOLUTION
-A text file with the steps to build an image.
-= How it works
-| Word | Job |
-| FROM | Base image |
-| WORKDIR | Folder |
-| COPY | Add files |
-| RUN | Do at build time |
-| ENV | Set a variable |
-| USER | Run as |
-| CMD | Default command |
+A **Dockerfile** is a text file with the steps to build an image, one instruction per line. It lives in the repository, so it is reviewed and versioned like code.
+| Instruction | What it does | When |
+| `FROM` | Start from a base image | Build |
+| `WORKDIR` | Set the working folder (creates it) | Build |
+| `COPY` | Copy files from your project into the image | Build |
+| `RUN` | Run a command, such as installing packages | Build |
+| `ENV` | Set an environment variable | Build and run |
+| `EXPOSE` | Document which port the app listens on | Documentation only |
+| `USER` | Which user later steps and the app run as | Build and run |
+| `CMD` | The default command when a container starts | Run |
+= A complete example
+> FROM node:24-slim
+> WORKDIR /app
+> COPY package*.json ./
+> RUN npm ci --omit=dev
+> COPY . .
+> USER node
+> EXPOSE 3000
+> CMD ["node", "server.js"]
+- FROM node:24-slim = Node.js 24 on a small Debian base
+- COPY package*.json ./ = only the dependency lists first, for better caching
+- RUN npm ci --omit=dev = install exact production dependencies at build time
+- COPY . . = then the rest of the code
+- USER node = do not run as root
+- CMD ["node", "server.js"] = start the server; the JSON form passes signals correctly
+= Build it
+$ docker build -t shop:1.0 .
+- docker build = build an image from a Dockerfile
+- -t shop:1.0 = name and tag for the result
+- . = the build context: the folder whose files `COPY` may use
+A `.dockerignore` file lists what to leave out of the context: `node_modules`, `.git`, `.env`. Smaller context, faster builds, no secrets in the image.
 = Real-time example | PRACTICE
-The recipe is reviewed in a pull request like code: "why are we running as root?"
+A pull request changes the Dockerfile. A reviewer spots that the `USER` line was removed and asks "why are we running as root now?". The question is only possible because the recipe is code that can be reviewed.
 ? RUN happens at... | container start | *build time | deletion
+^ https://docs.docker.com/reference/dockerfile/ Dockerfile reference
 
 # c-volume | Volume and bind mount | Beginner | Data that stays.
 @@ box Container ; bucket Volume ; db Data ; folder Host folder
 = Without it | PROBLEM
-Updating the database container deletes the data.
+A database runs in a container. To upgrade, you remove the old container and start a new one, and every customer record is gone, because it lived in the container's writable layer.
 = What it is | SOLUTION
-A **volume** is storage managed by Docker. A **bind mount** shows a host folder inside.
-= How it works
-Create a volume, then name it when starting the container. Docker mounts it at the path the program uses.
+Three ways to store data outside the container's own layer:
+| Kind | Where data lives | Good for |
+| Volume | A place Docker manages on the host | Databases, uploads: production data |
+| Bind mount | A folder you choose on the host | Development: edit code on your laptop, run it in the container |
+| tmpfs | Memory only | Temporary, sensitive files |
+= Use a volume
 $ docker volume create pgdata
-$ docker run -v pgdata:/var/lib/postgresql postgres:18
+- volume create pgdata = create a named volume
+$ docker run -d --name db -e POSTGRES_PASSWORD=dev -v pgdata:/var/lib/postgresql postgres:18
+- -e POSTGRES_PASSWORD=dev = a setting the postgres image requires
+- -v pgdata:/var/lib/postgresql = mount volume `pgdata` at the path where PostgreSQL 18 keeps its data
+Remove the container, start a new one with the same `-v`, and the data is still there.
+$ docker volume ls
+$ docker volume inspect pgdata
+- inspect = details, including where on the host it is stored
+= Use a bind mount
+$ docker run --rm -v "$PWD":/app -w /app node:24 npm test
+- -v "$PWD":/app = show the current folder (`$PWD`) inside the container at /app
+- -w /app = start the command in that folder
+- npm test = run the tests with the container's Node, on your files
+Edits on your laptop are visible inside immediately.
+= Careful with deletion
+$ docker compose down -v
+$ docker volume prune
+- down -v / volume prune = these **delete volumes** and the data in them
+!! Back up a database before upgrades, ideally with its own tool (`pg_dump`), not by copying files of a running database.
 = Real-time example | PRACTICE
-A shop upgrades its database image: stop, start the new one on the same volume, data intact. Backup first.
+A shop upgrades its database image from 18.0 to 18.1. They stop the old container, start the new image with the same volume, and all data is there. Before that, they took a `pg_dump` backup, just in case.
 ? Best for database data? | Writable layer | *Volume | Image
+^ https://docs.docker.com/engine/storage/volumes/ Docker: volumes
 
 # c-dknet | Docker network | Beginner | How containers find each other.
 @@ user Browser ; router Docker network ; box App ; db Database
 = Without it | PROBLEM
-Containers get new addresses each time, so fixed numbers break.
+Every new container gets a new internal IP address. If the app is configured with the database's address `172.17.0.3`, it breaks the next time the database container is recreated.
 = What it is | SOLUTION
-A private network where containers reach each other **by name**.
-= How it works
+A **Docker network** is a private virtual network on the host. Containers on the same user-created network reach each other **by container name**: Docker runs a small DNS that answers `db` with the current address.
+Nothing outside can reach them unless you **publish** a port.
+= Create and use one
 $ docker network create shop
-$ docker run -d --name db --network shop postgres:18
-`-p 8080:80` opens one door to the outside.
+- network create shop = a new bridge network named `shop`
+$ docker run -d --name db --network shop -e POSTGRES_PASSWORD=dev postgres:18
+- --network shop = attach this container to that network
+$ docker run -d --name app --network shop -e DB_HOST=db -p 8080:3000 shop:1.0
+- -e DB_HOST=db = the app connects to the host name `db`
+- -p 8080:3000 = only the app is reachable from outside, on port 8080
+= Check it
+$ docker network ls
+$ docker network inspect shop
+- inspect = which containers are attached and their addresses
+$ docker exec app getent hosts db
+- getent hosts db = inside `app`, look up the name `db`
+= Ports: -p host:container
+- `-p 8080:80` = everyone who can reach your machine can reach the container's port 80 on 8080.
+- `-p 127.0.0.1:8080:80` = only programs on your own machine.
+- No `-p` = only other containers on the same network.
 = Real-time example | PRACTICE
-Only the web container is published. The database is reachable by the app and by nobody else.
+A team publishes only the web container. The database has no `-p` at all: the app reaches it as `db:5432` inside the network, and nobody on the internet can even try to connect to it.
 ? Containers on one network use... | IP lists | *names | emails
+^ https://docs.docker.com/engine/network/ Docker: networking
 
 # c-compose | Compose | Beginner | Several containers as one app.
 @@ user Developer ; doc compose.yaml ; box Containers ; router Network
 = Without it | PROBLEM
-Six long `docker run` commands in the right order.
+A real application needs a web front end, an API, a database and a cache. That is four long `docker run` commands with many options, typed in the right order, every time.
 = What it is | SOLUTION
-One file that describes all services, networks and volumes.
-= How it works
-The first command creates the network and starts everything. The second stops and removes it, but keeps named volumes.
+**Docker Compose** describes all the containers of an application in one file, `compose.yaml`, and starts or stops them with one command. It creates a network for them automatically, so they find each other by service name.
+= A compose file
+> services:
+>   app:
+>     build: .
+>     ports: ["8080:3000"]
+>     environment:
+>       DB_HOST: db
+>     depends_on: [db]
+>   db:
+>     image: postgres:18
+>     environment:
+>       POSTGRES_PASSWORD: dev
+>     volumes: ["pgdata:/var/lib/postgresql"]
+> volumes:
+>   pgdata:
+- services = each container; `app` and `db` are names you choose and are also the host names on the network
+- build: . = build this service's image from the Dockerfile in the current folder
+- image: postgres:18 = use a ready image instead
+- ports = publish, like `-p`
+- depends_on: [db] = start `db` before `app`
+- volumes: (at the bottom) = declare named volumes
+= Run it
 $ docker compose up -d
+- up = build if needed, create the network and volumes, start everything
+- -d = in the background
+$ docker compose ps
+- ps = the services and their state
+$ docker compose logs -f app
+- logs -f app = follow the logs of one service
 $ docker compose down
+- down = stop and remove the containers and network; named volumes are kept. `down -v` also deletes volumes
 = Real-time example | PRACTICE
-A new colleague has web, API, database and cache running ten minutes after getting a laptop.
+A new colleague joins on Monday. She clones the repository and runs `docker compose up -d`. Ten minutes later the web app, API, database and cache are running on her laptop, exactly as for everyone else. No setup guide, no "which version did you install?".
 ? Compose is mainly for... | one host | many data centres | *one host, such as development
+^ https://docs.docker.com/compose/ Docker Compose documentation

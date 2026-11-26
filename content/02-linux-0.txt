@@ -39,156 +39,434 @@ The first **Android** phone uses the Linux kernel.
 ? Who wrote the first Linux kernel? | Dennis Ritchie | *Linus Torvalds | Richard Stallman
 
 ## Building blocks
+# c-shell | The terminal and everyday commands | Beginner | Moving around, reading and changing files, word by word.
+@@ user You ; laptop Terminal ; folder Files ; doc Output
+= Without it | PROBLEM
+Servers usually have no screen, no mouse and no desktop. You reach them over the network and see only text. If you can only click, you cannot work on them.
+The terminal is also faster for repeated work: one command can rename 1,000 files, and the same command can go into a script.
+= What it is | SOLUTION
+The **terminal** is a window where you type commands. The program reading them is the **shell**, usually **Bash** (or zsh on macOS).
+Every command has the same shape:
+$ ls -l /etc
+- ls = the program to run ("list")
+- -l = an **option** (also called flag) that changes how it works; here "long format". Options usually start with `-` (short) or `--` (long)
+- /etc = an **argument**: what the program works on, here a folder
+The prompt before your command, such as `ana@server:~$`, tells you the user, the machine and the current folder. `~` means your home folder.
+= Where am I, what is here
+$ pwd
+- pwd = "print working directory": the folder you are in
+$ ls -la
+- ls = list files
+- -l = long format: permissions, owner, size, date
+- -a = all, including hidden files whose names start with `.`
+$ cd /var/log
+- cd = "change directory"
+- /var/log = an **absolute** path: starts at `/`, the top of the tree
+$ cd ..
+- .. = the folder above. `.` is the current folder, `~` your home, `-` the previous folder
+= Make, copy, move, delete
+$ mkdir -p projects/shop
+- mkdir = make a directory
+- -p = also create missing parent folders, and do not complain if it exists
+$ cp config.yml config.yml.bak
+- cp = copy: first the source, then the destination
+$ cp -r site/ backup/
+- -r = recursive: copy a folder with everything inside
+$ mv old.txt new.txt
+- mv = move, which is also how you rename
+$ rm notes.txt
+- rm = remove. There is **no** recycle bin: the file is gone
+$ rm -r build/
+- -r = remove a folder and everything in it
+!! `rm -rf` deletes without asking (`-f` = force). Read the path twice before pressing Enter, especially with `sudo`.
+= Read files
+$ cat /etc/hostname
+- cat = print a whole file. Fine for short files
+$ less /var/log/syslog
+- less = page through a long file. Space = next page, `/word` = search, `q` = quit
+$ tail -f /var/log/nginx/access.log
+- tail = show the last lines of a file (10 by default)
+- -f = follow: keep showing new lines as they are written. `Ctrl+C` stops it
+$ grep -i "error" app.log
+- grep = print only lines that contain a pattern
+- -i = ignore upper and lower case
+- "error" = the pattern; quote it if it has spaces
+= Get help
+$ man ls
+- man = the manual page for a command. `q` quits
+$ ls --help
+- --help = a short summary of options, built into most commands
+Useful keys: `Tab` completes names, the up arrow repeats earlier commands, `Ctrl+C` stops a running command, `Ctrl+R` searches your history.
+= Real-time example | PRACTICE
+A website shows errors. Asha connects to the server and runs, in order:
+$ cd /var/log/nginx
+$ ls -lh
+$ tail -n 50 error.log
+$ grep -c "upstream timed out" error.log
+- -n 50 = last 50 lines
+- -h = sizes as K, M, G instead of bytes
+- -c = count matching lines instead of printing them
+In two minutes she knows the web server cannot reach the app behind it, 340 times in the last hour, and calls the right team.
+? In "ls -l /etc", what is -l? | The program | *An option | The folder
+^ https://www.gnu.org/software/bash/manual/bash.html Bash reference manual
+^ https://ubuntu.com/tutorials/command-line-for-beginners Ubuntu: command line for beginners
+
 # c-fs | The file system | Beginner | One tree for everything.
 @@ user You ; folder File system ; db Disk ; doc Files
 = Without it | PROBLEM
-A disk is only numbered blocks. Without names and folders you could not find anything.
+A disk is only millions of numbered blocks. Without names and folders you could never find anything again.
 = What it is | SOLUTION
-A single tree that starts at `/`. Disks are **mounted** as folders. There are no drive letters.
-= How it works
-| Path | Holds |
-| /etc | Settings |
-| /home | People's files |
-| /var/log | Logs |
-| /usr/bin | Programs |
-| /tmp | Temporary files |
-| /proc | Live kernel data |
-$ pwd
-$ ls -la /etc
+Linux has a **single tree** that starts at `/`, called **root**. There are no drive letters like `C:`.
+- A second disk or a USB stick is **mounted**: attached to a folder, such as `/mnt/usb` or `/data`.
+- Names are case-sensitive: `Report.txt` and `report.txt` are two different files.
+- Paths use `/`, never `\`.
+- "Everything is a file": even devices (`/dev/sda`) and live kernel data (`/proc`) appear as files.
+= Where things live
+| Path | What is kept there |
+| `/etc` | Settings of the system and of programs, as text files |
+| `/home/ana` | Ana's personal files (`~` for Ana) |
+| `/root` | Home folder of the administrator |
+| `/var/log` | Log files |
+| `/var/lib` | Program data, such as databases |
+| `/usr/bin` | Installed programs |
+| `/tmp` | Temporary files, often cleared on reboot |
+| `/proc` | Live information from the kernel |
+| `/dev` | Devices: disks, terminals |
+= Disk space
+$ df -h
+- df = "disk free": space on each mounted file system
+- -h = human-readable sizes (G, M) instead of blocks
+> Filesystem  Size  Used Avail Use% Mounted on
+> /dev/sda1    40G   38G  2.0G  95% /
+$ du -sh /var/log/*
+- du = "disk usage" of files and folders
+- -s = one total per argument instead of every subfolder
+- /var/log/* = every item inside /var/log; `*` matches all names
+= Links and finding files
+$ ln -s /opt/app/current /srv/app
+- ln -s = create a **symbolic link**: a shortcut that points to another path
+$ find /var/log -name "*.log" -mtime +7
+- find = search the tree
+- /var/log = where to start
+- -name "*.log" = names ending in .log
+- -mtime +7 = changed more than 7 days ago
 = Real-time example | PRACTICE
-"Disk full" at night: `df -h` shows `/var` at 100%, `du -sh /var/log/*` finds a 40 GB log. Rotate it, then fix the cause.
+At 3 a.m. an alert says "disk full". `df -h` shows `/` at 100%. `du -sh /var/log/*` points to `/var/log/app` at 40 GB: debug logging was left on. The engineer empties the log with `truncate -s 0`, turns debug off, and adds **log rotation** (`logrotate`) so old logs are compressed and deleted automatically.
 ? Where are settings usually kept? | /tmp | */etc | /proc
+^ https://refspecs.linuxfoundation.org/FHS_3.0/fhs/index.html Filesystem Hierarchy Standard
 
 # c-pkg | Package managers | Beginner | Installing software safely.
 @@ user Admin ; box apt or dnf ; cloud Repository ; shield Signature
 = Without them | PROBLEM
-You search the web, download unknown files, and forget to update them.
+You search the web, download installers from unknown sites, install the libraries they need by hand, and forget to update them. Six months later nobody knows what is installed or whether it has security holes.
 = What they are | SOLUTION
-A package manager installs, updates and removes software from trusted **repositories**, with everything it depends on.
-= How it works
-Packages are **signed**; the manager checks the signature before installing.
+A **package manager** installs, updates and removes software from trusted **repositories** (online stores of packages), together with everything each package depends on.
+| Distribution | Package manager | Package format |
+| Ubuntu, Debian, Kali | `apt` | .deb |
+| RHEL, Fedora, Rocky | `dnf` | .rpm |
+| Alpine (containers) | `apk` | .apk |
+| macOS | `brew` | formula |
+Packages are **signed** by the distribution. The manager checks the signature and refuses tampered packages.
+= Install with apt
 $ sudo apt update
+- sudo = run as administrator; installing software changes the system
+- apt update = download the latest **list** of available packages. It installs nothing
 $ sudo apt install nginx
+- install = download and install a package and its dependencies
+- nginx = the package name
+$ sudo apt install -y nginx curl
+- -y = answer "yes" automatically; used in scripts
+- nginx curl = several packages at once
+= Update and remove
 $ sudo apt upgrade
+- upgrade = install newer versions of everything already installed, from the list fetched by `update`
+$ sudo apt remove nginx
+- remove = uninstall, keeping its settings files
+$ sudo apt purge nginx
+- purge = uninstall and delete its settings too
+$ apt list --installed | grep nginx
+- list --installed = show what is installed; `| grep nginx` keeps only matching lines
+!! Always run `apt update` before `install` or `upgrade`, or apt works from an old list and may not find the fixed version.
+= The same with dnf
+$ sudo dnf install nginx
+$ sudo dnf upgrade
+`dnf` does not need a separate update step: it refreshes its list itself.
 = Real-time example | PRACTICE
-A security hole is announced on Monday. With one command, run by Ansible, 200 servers are fixed by Monday evening.
-? What does apt check? | The colour | *The package signature | Your age
+On Monday a serious security hole in OpenSSL is announced. The team runs `apt update && apt upgrade -y` on 200 servers through Ansible. By evening every server has the fixed version, and `apt list --installed` proves it.
+? What does apt update do? | Installs updates | *Refreshes the list of available packages | Restarts the server
+^ https://ubuntu.com/server/docs/package-management Ubuntu: package management
 
 # c-ssh | SSH | Beginner | A safe terminal on a machine far away.
 @@ user Admin ; key SSH ; server Remote server ; doc Known hosts
 = Without it | PROBLEM
-Telnet sent passwords as readable text. Anyone on the path could see them.
+Older tools like Telnet sent everything, including passwords, as readable text. Anyone on the network path could read them.
 = What it is | SOLUTION
-**Secure Shell** encrypts the connection and proves who both sides are.
-= How it works
-You keep a private key; the server holds your public key. The first time, check the server's fingerprint.
-$ ssh ana@server
+**SSH** (Secure Shell) gives you a terminal on another computer over an encrypted connection. It also proves who both sides are: the server proves it is the right server, and you prove who you are, ideally with a **key** instead of a password.
+A key pair has two halves:
+- the **private key** stays on your computer and is never shared;
+- the **public key** is copied to every server you want to reach.
+= Connect
+$ ssh ana@203.0.113.10
+- ssh = start a secure connection
+- ana = the user name on the remote machine
+- @ = separates user and machine
+- 203.0.113.10 = the server's address or name
+$ ssh -i ~/.ssh/work_key -p 2222 ana@server
+- -i ~/.ssh/work_key = use this private key file
+- -p 2222 = connect to port 2222 instead of the default 22
+Type `exit` or press `Ctrl+D` to close the connection.
+= Create and install a key
+$ ssh-keygen -t ed25519 -C "ana@laptop"
+- ssh-keygen = create a new key pair
+- -t ed25519 = the key type; ed25519 is modern, short and safe
+- -C "ana@laptop" = a comment to recognise the key later
+It writes `~/.ssh/id_ed25519` (private) and `~/.ssh/id_ed25519.pub` (public). Set a passphrase when asked.
+$ ssh-copy-id ana@server
+- ssh-copy-id = append your public key to `~/.ssh/authorized_keys` on the server
+= Copy files
+$ scp report.pdf ana@server:/tmp/
+- scp = secure copy over SSH: source first, destination second
+- ana@server:/tmp/ = machine, a colon, then the path there
+$ rsync -avz site/ ana@server:/var/www/site/
+- rsync = copy only what changed
+- -a = archive: keep permissions and dates, include subfolders
+- -v = verbose; -z = compress during transfer
+= The first connection
+> The authenticity of host 'server' can't be established.
+> ED25519 key fingerprint is SHA256:Xb3…
+> Are you sure you want to continue connecting (yes/no)?
+SSH has never seen this server. Compare the fingerprint with one from your provider before typing `yes`. It is then stored in `~/.ssh/known_hosts`. If it ever changes unexpectedly, SSH warns loudly: stop and find out why.
 = Real-time example | PRACTICE
-A company closes password login on all servers. Attack attempts continue, but without a key they cannot get in.
+A company turns off password login on all servers (`PasswordAuthentication no` in `/etc/ssh/sshd_config`) and allows keys only. Bots keep trying thousands of passwords a day, but none can get in. When an employee leaves, their public key is removed and their access ends.
 ? What stays on your computer? | The public key only | *The private key | The server's key
+^ https://www.openssh.com/manual.html OpenSSH manual
 
 # c-cron | Scheduled jobs | Beginner | Work that happens by itself.
 @@ user Admin ; gear cron / timer ; server Job ; doc Log
 = Without it | PROBLEM
 " a I forgot the backup on Sunday.
-Someone must remember every night.
+Somebody must remember to run backups, clean-ups and reports at the right time, every day, forever. People forget, go on holiday and change jobs.
 = What it is | SOLUTION
-**cron** runs commands at set times. **systemd timers** do the same with better logs.
-= How it works
-Five fields: minute, hour, day, month, weekday.
-$ 30 2 * * * /opt/backup.sh
-means 02:30 every day.
+**cron** is a service that runs commands at fixed times. Each user has a **crontab** (cron table): one line per job.
+**systemd timers** do the same job with better logging and are common on modern distributions.
+= Edit your crontab
+$ crontab -e
+- crontab = manage the current user's scheduled jobs
+- -e = edit them in a text editor
+$ crontab -l
+- -l = list the jobs
+= Read a cron line
+> 30 2 * * * /opt/backup.sh >> /var/log/backup.log 2>&1
+- 30 = minute (0–59)
+- 2 = hour (0–23): so 02:30
+- * = day of month: every day
+- * = month: every month
+- * = day of week (0–7, Sunday is 0 or 7): any day
+- /opt/backup.sh = the command to run; always use full paths, cron has a very short PATH
+- >> /var/log/backup.log 2>&1 = append normal output and errors to a log file
+= More examples
+| Line | Runs |
+| `*/15 * * * *` | Every 15 minutes |
+| `0 9 * * 1-5` | 09:00, Monday to Friday |
+| `0 0 1 * *` | Midnight on the first day of each month |
+| `@reboot` | Once after every start-up |
 = Real-time example | PRACTICE
-A backup script ran for months and wrote nothing, because nobody read its mail. Always check the **result**, and alert when a job does not report success.
-? "30 2 * * *" runs... | every 30 minutes | *at 02:30 daily | on day 30
+A backup script ran every night for months and "worked". When a disk failed, the backups were empty: the script had been failing silently because a password changed. Nobody read its output.
+! Check the **result**, not just that the job ran: write a log, and send an alert when a job does not report success.
+? "30 2 * * *" runs... | every 30 minutes | *at 02:30 every day | on day 30
+^ https://man7.org/linux/man-pages/man5/crontab.5.html crontab manual
 
 # c-env | Environment variables | Beginner | Settings handed to a program.
 @@ user Developer ; card Variables ; server Program ; key Secrets
 = Without them | PROBLEM
-The database address is written inside the code, so test and production need different code.
+The database address is written inside the code. Test and production need different addresses, so you would need different code for each, and a password in the code ends up in Git for everyone to read.
 = What they are | SOLUTION
-Named values a program receives when it starts, such as `DB_HOST` or `PATH`.
-= How it works
+**Environment variables** are named values that a program receives when it starts, such as `DB_HOST=db.test`. The same code reads them and behaves differently in each place.
+- Names are usually UPPERCASE with underscores.
+- A program passes its variables on to programs it starts (its children).
+- `PATH` is special: a list of folders where the shell looks for commands.
+= Set and read
 $ export DB_HOST=db.test
-$ ./app
-Child programs inherit them. `PATH` lists where the shell looks for commands.
+- export = make the variable available to programs started from this shell
+- DB_HOST=db.test = name, equals sign, value. **No spaces** around `=`
+$ echo $DB_HOST
+- echo = print text
+- $DB_HOST = `$` in front means "the value of this variable"
+$ DB_HOST=db.prod ./app
+- (VAR=value before a command) = set it only for that one command
+$ env
+- env = list all variables of the current shell
+= PATH
+$ echo $PATH
+> /usr/local/bin:/usr/bin:/bin
+When you type `nginx`, the shell looks in each folder of PATH, left to right, and runs the first `nginx` it finds. "command not found" usually means the program is not in any of these folders.
+$ export PATH="$HOME/.local/bin:$PATH"
+- "$HOME/.local/bin:$PATH" = add a folder in front of the existing list
+To keep a variable after closing the terminal, add the `export` line to `~/.bashrc`.
 = Real-time example | PRACTICE
-The same container image runs in test and production; only the variables differ. Keep real secrets in a secret store: variables can appear in logs and process lists.
+One container image runs in test and in production. Only the variables differ: `DB_HOST`, `LOG_LEVEL`, `PAYMENT_URL`. No rebuild is needed to move a version from test to production.
+!! Variables can show up in logs, error pages and process lists. Keep real passwords in a secret store (Vault, AWS Secrets Manager, Kubernetes Secrets), not in plain files committed to Git.
 ? PATH tells the shell... | your name | *where to look for commands | the time
+^ https://12factor.net/config The Twelve-Factor App: config
 
 ## Network building blocks
 # c-osi | Layers of a network | Beginner | Why the work is split into layers.
 @@ laptop Sender ; layer Layers ; server Receiver ; doc Packet
 = Without layers | PROBLEM
-Every program would need to know about cables, radio and routes.
+Without layers, every program would need to know about cables, Wi-Fi radio, routes across the world and lost packets. A chat app would have to be rewritten for every new kind of network.
 = What it is | SOLUTION
-Each layer does one job and uses the one below. The **OSI model** has seven; **TCP/IP** groups them into four.
-= How it works
-| OSI layer | Example |
-| 7 Application | HTTP, DNS |
-| 6 Presentation | Encoding |
-| 5 Session | Sessions |
-| 4 Transport | TCP, UDP |
-| 3 Network | IP |
-| 2 Data link | Ethernet, Wi-Fi |
-| 1 Physical | Cable, radio |
+Networking is split into **layers**. Each layer does one job and only talks to the layer directly above and below it. A web browser does not care whether you use Wi-Fi or a cable.
+The **OSI model** describes seven layers and is used for teaching and troubleshooting. Real networks use **TCP/IP**, which groups them into four.
+= The layers
+| OSI layer | Job | Example |
+| 7 Application | What the program wants | HTTP, DNS, SSH |
+| 6 Presentation | Format, encryption | TLS, UTF-8 |
+| 5 Session | Keep a conversation | Sessions |
+| 4 Transport | Deliver to the right program | TCP, UDP, ports |
+| 3 Network | Find a route between networks | IP addresses, routers |
+| 2 Data link | Deliver on the local network | Ethernet, Wi-Fi, MAC addresses |
+| 1 Physical | Send signals | Cable, fibre, radio |
+= How data travels
+When you open a web page, your data goes **down** the layers on your computer: HTTP request, put in a TCP segment with a port, put in an IP packet with addresses, put in an Ethernet frame, sent as signals. The server unpacks it going **up** the layers.
+Each layer adds its own small header. This wrapping is called **encapsulation**.
 = Real-time example | PRACTICE
-"The site is down." Check from the bottom: cable or Wi-Fi, IP address, port, then the application. You find the broken layer quickly.
+"The site is down." A good engineer checks from the bottom up:
+- Layer 1–2: is the network connected? (`ip link`)
+- Layer 3: does the server answer? (`ping`)
+- Layer 4: is the port open? (`nc -vz host 443`)
+- Layer 7: does the application answer correctly? (`curl -v`)
+The first layer that fails is where the problem is, so nobody wastes an hour debugging the code when a cable is loose.
 ? TCP belongs to layer... | 1 | 7 | *4
+^ https://www.cloudflare.com/learning/ddos/glossary/open-systems-interconnection-model-osi/ Cloudflare: the OSI model
 
 # c-tcp | TCP and UDP | Beginner | Careful delivery or fast delivery.
 @@ laptop Client ; router TCP ; server Server ; queue Segments
 = Without it | PROBLEM
-IP packets can be lost, doubled or arrive in the wrong order.
+The IP layer only does its best. Packets can be lost, arrive twice or arrive in the wrong order. A downloaded file with a missing piece is broken.
 = What it is | SOLUTION
-**TCP** numbers data, confirms it and sends lost parts again. **UDP** just sends.
-= How it works
-TCP opens with three messages: SYN, SYN-ACK, ACK. Then data flows both ways.
+Two transport protocols sit on top of IP:
+- **TCP** (Transmission Control Protocol) numbers every piece, waits for confirmation, sends lost pieces again and puts them back in order. Reliable, slightly slower.
+- **UDP** (User Datagram Protocol) just sends and does not check. Fast, but pieces may be lost.
+Both use **ports** (numbers 0–65535) so the right program on the machine receives the data.
+= The TCP handshake
+Before any data, TCP opens a connection with three messages:
+- SYN = client: "I want to connect"
+- SYN-ACK = server: "OK, I am ready"
+- ACK = client: "Confirmed"
+Then data flows in both directions, and every piece is acknowledged.
+= See connections
+$ ss -tunap
+- ss = "socket statistics": list network connections
+- -t = TCP; -u = UDP
+- -n = show numbers instead of names (faster, clearer)
+- -a = all, including listening ports
+- -p = show which program owns each connection (needs sudo for other users' programs)
+= Which to use
+| Use | Protocol | Why |
+| Web pages, files, email, SSH | TCP | Every byte must arrive |
+| Video calls, games | UDP | A late packet is useless; skip it |
+| DNS lookups | UDP mostly | Tiny question and answer |
+| HTTP/3 | QUIC over UDP | Builds its own reliability, faster setup |
 = Real-time example | PRACTICE
-| Use | Protocol |
-| Web pages, files, email | TCP |
-| Live voice, games, DNS | UDP mostly |
-| HTTP/3 | QUIC over UDP |
+In a video call on bad Wi-Fi the picture freezes for a moment, then jumps forward. That is UDP: lost frames are skipped instead of waited for. A file download on the same Wi-Fi is slower but arrives complete, because TCP sends the missing parts again.
 ? A video call prefers... | TCP | *UDP | SSH
+^ https://www.rfc-editor.org/rfc/rfc9293 RFC 9293: TCP
 
 # c-dns | DNS | Beginner | The phone book of the internet.
 @@ user Visitor ; db DNS ; server Web server ; router Resolver
 = Without it | PROBLEM
-You would type 203.0.113.10 instead of a name, and every visitor would need the new number when the server moves.
+Computers connect using numbers such as 203.0.113.10. Without names you would have to remember numbers for every site, and when a site moved to a new server, every visitor would need the new number.
 = What it is | SOLUTION
-The **Domain Name System** turns names into addresses. It is spread over many servers.
-= How it works
-A resolver asks a root server, then the `.com` server, then the domain's own server, and remembers the answer for its **TTL**.
+The **Domain Name System** turns names into addresses. It is a huge distributed database: no single server knows everything.
+| Record | Means |
+| A | Name to IPv4 address |
+| AAAA | Name to IPv6 address |
+| CNAME | Alias: this name is another name |
+| MX | Mail server for the domain |
+| TXT | Free text, used for verification and email security |
+| NS | Which servers are in charge of this domain |
+= How a lookup works
+1. Your computer asks a **resolver** (from your provider, or 1.1.1.1 / 8.8.8.8).
+2. The resolver asks a **root** server: "who handles `.com`?"
+3. It asks the `.com` servers: "who handles `example.com`?"
+4. It asks example.com's own **name server** for the record, and gets the address.
+5. It remembers the answer for its **TTL** (time to live, in seconds), so the next visitor gets it instantly.
+= Look it up yourself
+$ dig shop.example.com
+- dig = ask DNS and show the full answer
+$ dig +short shop.example.com A
+- +short = print only the result
+- A = which record type to ask for
+$ nslookup shop.example.com
+- nslookup = an older tool that does the same, also available on Windows
 = Real-time example | PRACTICE
-Before moving a site, lower the TTL to 60 seconds a day earlier. After the move everyone sees the new address in a minute.
+A team will move its website to a new server on Saturday. On Friday they lower the TTL from one day to 60 seconds. On Saturday they change the A record; within a minute everyone reaches the new server. If they had forgotten, some visitors would have kept going to the old server for up to a day.
 ? TTL means... | the owner | *how long an answer may be kept | the price
+^ https://www.cloudflare.com/learning/dns/what-is-dns/ Cloudflare: what is DNS
 
 # c-http | HTTP and HTTPS | Beginner | How browsers and servers talk.
 @@ laptop Browser ; doc HTTP ; server Web server ; shield TLS
 = Without it | PROBLEM
-Every program would invent its own way to ask for a page.
+Every program would invent its own way to ask for a page or send a form, and no browser could talk to every server.
 = What it is | SOLUTION
-A request (method, path, headers, body) and a response (status, headers, body). **HTTPS** is HTTP inside encrypted TLS.
-= How it works
-| Status | Meaning |
-| 200 | OK |
-| 301 | Moved |
-| 401 / 403 | Log in / not allowed |
-| 404 | Not found |
-| 500 | Server error |
-| 503 | Unavailable |
+**HTTP** is a simple request and response:
+- the **request**: a method (`GET` to read, `POST` to send, `PUT`/`PATCH` to change, `DELETE`), a path (`/cart`), headers (extra information) and sometimes a body;
+- the **response**: a status code, headers and a body (the page, image or data).
+**HTTPS** is the same HTTP inside an encrypted **TLS** connection, so nobody on the way can read or change it.
+= Status codes
+| Code | Meaning | Usually whose problem |
+| 200 | OK | Nobody |
+| 301 / 302 | Moved, go to another address | Nobody |
+| 400 | Bad request | The client |
+| 401 | Not logged in | The client |
+| 403 | Logged in but not allowed | The client or permissions |
+| 404 | Not found | Wrong address or missing page |
+| 500 | Server error | The application |
+| 502 / 504 | Bad gateway / gateway timeout | The app behind a proxy is down or slow |
+| 503 | Unavailable, overloaded or maintenance | The server side |
+= Try it with curl
+$ curl -i https://example.com
+- curl = send an HTTP request from the terminal
+- -i = include the response headers in the output
+$ curl -v https://example.com
+- -v = verbose: show everything, including the TLS handshake and the request sent
+$ curl -X POST -H "Content-Type: application/json" -d '{"qty":2}' https://api.example.com/cart
+- -X POST = the method
+- -H "…" = add a header
+- -d '…' = the request body
 = Real-time example | PRACTICE
-Users report errors. 4xx: usually the request is wrong. 5xx: the server is. That one digit tells you which team to call.
+Users report errors after a release. The dashboards show many **502** responses. A 5xx means the server side, and 502 specifically means the proxy could not get an answer from the app behind it. The team checks the app servers, finds they crash on start-up, and rolls back.
 ? 503 points to... | the visitor | *the server side | DNS spelling
+^ https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview MDN: HTTP overview
 
 # c-proxy | Firewalls, proxies and load balancers | Intermediate | Three boxes between user and app.
 @@ cloud Internet ; gate Firewall ; router Reverse proxy ; server App
 = Without them | PROBLEM
-The app faces the whole internet alone.
+If your application faces the whole internet alone, every open port is a door for attackers, one server takes all the traffic, and replacing it means downtime.
 = What they are | SOLUTION
-A **firewall** allows or drops traffic. A **reverse proxy** (nginx, HAProxy) receives requests for your servers. A **load balancer** spreads them.
-= How it works
-The proxy ends TLS, adds headers, caches and passes the request on.
+- A **firewall** allows or drops traffic by address, port and protocol. Everything not allowed is blocked.
+- A **reverse proxy** (nginx, HAProxy, Caddy) receives requests on behalf of your servers. It can handle HTTPS, add headers, cache pages and pass the request on.
+- A **load balancer** spreads requests over several servers and stops sending to one that fails its **health check**.
+One program often does the proxy and load-balancer jobs together.
+= Firewall on Ubuntu
+$ sudo ufw allow 22/tcp
+- ufw = "uncomplicated firewall", Ubuntu's simple firewall tool
+- allow 22/tcp = let in TCP traffic to port 22 (SSH)
+$ sudo ufw allow 443/tcp
+$ sudo ufw enable
+- enable = switch the firewall on. Allow SSH **before** this, or you lock yourself out of a remote server
+$ sudo ufw status verbose
+- status verbose = show the rules and the default policy
+= A small nginx reverse proxy
+> server {
+>   listen 80;
+>   location / { proxy_pass http://127.0.0.1:3000; }
+> }
+- listen 80 = accept requests on port 80
+- location / = for every path
+- proxy_pass http://127.0.0.1:3000 = forward the request to the app on this machine's port 3000
+The app itself is not reachable from outside; only nginx is.
 = Real-time example | PRACTICE
-A company replaces one app server during the day: the proxy sends users to the other, then back. Nobody notices.
+A shop has two app servers behind a load balancer. During the day the team takes server A out of the pool, updates it, puts it back, then does the same with B. The load balancer sends all users to the remaining server meanwhile. Nobody notices the release.
 ? Who spreads requests over servers? | Firewall | *Load balancer | DNS TTL
+^ https://nginx.org/en/docs/http/ngx_http_proxy_module.html nginx: proxy module

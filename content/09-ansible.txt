@@ -12,11 +12,20 @@
 : a ok v1.28
 : b warn v1.24
 : d err missed
-Doing the same steps by SSH leaves each server slightly different. That is **configuration drift**.
+An admin logs in to 20 servers one by one over SSH and runs the same commands. One server is skipped because of a phone call, another gets an older version. After a few months every server is slightly different. This is called **configuration drift**, and it causes the bugs that "only happen on server 7".
 = Agentless | SOLUTION
 + c
 ~ c>a SSH ;; c>b SSH ;; c>d SSH
-Ansible connects over SSH (or WinRM / PSRP for Windows), copies small modules, runs them with Python, removes them.
+**Ansible** runs from one machine, the **control node** (your laptop or a CI runner). It connects to each managed host over **SSH** (or WinRM/PSRP for Windows), copies a small module, runs it with Python, and removes it.
+Nothing needs to be installed on the managed hosts except SSH and Python. No agent to install, update or secure.
+= Install Ansible
+$ python3 -m pip install --user ansible
+- python3 -m pip = run Python's package installer
+- install --user = install for your user only, no sudo
+- ansible = the full package: ansible-core plus a big set of collections
+$ ansible --version
+- --version = shows the ansible-core version, its config file and Python
+ansible-core 2.20 and 2.21 need Python 3.12 to 3.14 on the control node, which must be Linux, macOS or WSL on Windows.
 = Inventory
 + i
 ~ c>i who?
@@ -25,18 +34,22 @@ Ansible connects over SSH (or WinRM / PSRP for Windows), copies small modules, r
 > web2 ansible_host=10.0.1.12
 > [db]
 > db1 ansible_host=10.0.2.11
-Cloud inventory plugins can build the list automatically.
-= Ad hoc
-One module, run once, with no playbook. Ansible's ping logs in and checks Python; it is not a network ping.
+- [web] / [db] = groups
+- ansible_host = the address to connect to
+Save it as `hosts.ini`. Cloud inventory plugins can build the list automatically from tags.
+= First contact: ad hoc ping
 ~ c>a ping ;; c>b ping
 $ ansible web -i hosts.ini -m ansible.builtin.ping
-= Idempotent
+- web = target group
+- -i hosts.ini = the inventory
+- -m ansible.builtin.ping = the ping module: log in over SSH and check that Python works
+> web1 | SUCCESS => { "ping": "pong" }
+> web2 | SUCCESS => { "ping": "pong" }
+This is not a network ping (ICMP); it proves Ansible can log in and run modules.
+= Idempotent by design
 : a ok no change
 : b ok changed
-Modules describe a state. Running twice changes nothing the second time.
-= Requirements
-* c
-ansible-core 2.20 and 2.21 need Python 3.12 to 3.14 on the control node, which must be Linux, macOS or WSL.
+Modules describe a state ("nginx is installed and running"). Each one checks first and changes only what differs. Run the same playbook twice: the second run reports **0 changed**. That is what makes Ansible safe to run again and again, for example every night to correct drift.
 ? Why is a second run safe? | It is blocked | *Modules are idempotent | It uses an agent
 ^ https://docs.ansible.com/ Ansible documentation
 
@@ -47,42 +60,75 @@ ansible-core 2.20 and 2.21 need Python 3.12 to 3.14 on the control node, which m
 @ t3 card 3 0 Service
 @ h flag 3 1 Handler
 @ s server 4 0 Server
-= Play
+= The play
 + p t1
 ~ p>t1
-> - hosts: web
+> - name: Web servers
+>   hosts: web
 >   become: true
 >   tasks:
 >     - name: Install nginx
->       ansible.builtin.apt: { name: nginx, state: present, update_cache: true }
-A play maps hosts to tasks. `become` uses sudo.
-= Template
+>       ansible.builtin.apt:
+>         name: nginx
+>         state: present
+>         update_cache: true
+- hosts: web = which inventory group this play targets
+- become: true = run tasks with sudo
+- name: Install nginx = a readable description, shown in the output
+- ansible.builtin.apt = the module, by its fully qualified name
+- state: present = make sure it is installed
+YAML is strict about indentation: use spaces, never tabs, and keep items at the same level aligned.
+= Templates
 + t2
 ~ t1>t2
->     - name: Configure
->       ansible.builtin.template: { src: nginx.conf.j2, dest: /etc/nginx/nginx.conf }
+>     - name: Configure nginx
+>       ansible.builtin.template:
+>         src: nginx.conf.j2
+>         dest: /etc/nginx/nginx.conf
+>         mode: "0644"
 >       notify: Reload nginx
-Jinja2 templates fill in variables.
-= Handler
+- template = render a Jinja2 file with variables, then copy it to the host
+- src: nginx.conf.j2 = the template in your project (in a `templates/` folder)
+- dest = where it goes on the server
+- mode: "0644" = file permissions; quoted so YAML keeps the leading zero
+- notify = trigger the handler if the file changed
+Inside the template, `server_name {{ domain }};` is filled in with the variable `domain`.
+= Handlers
 + h
 ~ t2>h only if changed
 >   handlers:
 >     - name: Reload nginx
->       ansible.builtin.service: { name: nginx, state: reloaded }
-Runs once at the end of the play, only when notified.
-= Service
-Make sure nginx runs now and after every reboot.
+>       ansible.builtin.service:
+>         name: nginx
+>         state: reloaded
+A handler runs **once**, at the end of the play, and **only** if a task notified it and that task reported changed. No configuration change, no reload.
+= Ensure the service
 + t3 s
 ~ t2>t3 ;; t3>s
->     - ansible.builtin.service: { name: nginx, state: started, enabled: true }
-= Run
+>     - name: nginx runs now and at boot
+>       ansible.builtin.service:
+>         name: nginx
+>         state: started
+>         enabled: true
+- state: started = start it if it is not running
+- enabled: true = start it at every boot
+= Run it
 $ ansible-playbook -i hosts.ini site.yml --check --diff
+- --check = predict changes without making them
+- --diff = show line-by-line file changes
 $ ansible-playbook -i hosts.ini site.yml
-`--check` predicts; `--diff` shows file changes. Some modules cannot predict fully.
-= Avoid shell | PRACTICE
+> PLAY RECAP
+> web1 : ok=4 changed=2 unreachable=0 failed=0
+- ok = tasks that ran; changed = tasks that changed something; failed / unreachable = problems
+Some modules cannot predict perfectly in check mode, for example when a later task depends on a package installed by an earlier one.
+= Avoid shell where you can | PRACTICE
 * t1
-`command` and `shell` are not idempotent by themselves. Prefer a real module, or add `creates:` and `changed_when:`.
+`command` and `shell` run anything, but Ansible cannot know whether they changed something, so they always report changed and may run again needlessly. Prefer a real module. If you must use them, tell Ansible when to skip or what counts as a change:
+>     - ansible.builtin.command: /opt/app/init-db.sh
+>       args: { creates: /opt/app/.db-initialised }
+- creates = skip this task if that file already exists
 ? When does a handler run? | Always | *When a task that changed notified it | First
+^ https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_handlers.html Ansible: handlers
 
 ## Structure
 # an-vars | Variables, facts, loops, conditions | Intermediate | Making one playbook fit many hosts.
@@ -95,24 +141,54 @@ $ ansible-playbook -i hosts.ini site.yml
 = Where values live
 + g h p
 ~ g>p ;; h>p
-`group_vars/web.yml` for a group, `host_vars/web1.yml` for one. Host beats group; `-e` on the command line beats everything.
+Variables make one playbook fit many hosts. Put them in files next to the inventory:
+> group_vars/web.yml     values for every host in group web
+> group_vars/all.yml     values for every host
+> host_vars/web1.yml     values for web1 only
+Precedence, from weak to strong: role defaults, `group_vars/all`, `group_vars/<group>`, `host_vars/<host>`, play vars, and finally `-e` on the command line, which beats everything:
+$ ansible-playbook site.yml -e app_version=1.8.2
+- -e app_version=1.8.2 = "extra variable" for this run only
 = Facts
 + f u r
 ~ u>f ;; r>f ;; f>p
-Ansible gathers OS, memory, addresses. Use `ansible_facts['os_family']`.
+At the start of a play Ansible **gathers facts** about each host: operating system, version, memory, CPU, IP addresses, disks. They are available as variables.
+$ ansible web1 -i hosts.ini -m ansible.builtin.setup -a "filter=ansible_distribution*"
+- setup = the module that gathers facts
+- filter=ansible_distribution* = show only facts whose names start like this
+> "ansible_distribution": "Ubuntu", "ansible_distribution_version": "24.04"
+In playbooks use `ansible_facts['os_family']`, `ansible_facts['memtotal_mb']`, and so on.
 = Conditions
-`when` runs a task only where the expression is true, so one play can serve both families.
 ~ p>u apt ;; p>r dnf
-> when: ansible_facts['os_family'] == 'Debian'
+>     - name: Install on Debian family
+>       ansible.builtin.apt: { name: nginx, state: present }
+>       when: ansible_facts['os_family'] == 'Debian'
+>     - name: Install on Red Hat family
+>       ansible.builtin.dnf: { name: nginx, state: present }
+>       when: ansible_facts['os_family'] == 'RedHat'
+- when = run the task only on hosts where the expression is true
+One play now serves both Ubuntu and RHEL servers.
 = Loops
 * u
-> - ansible.builtin.apt: { name: "{{ item }}", state: present }
->   loop: [git, curl, unzip]
-For packages, passing the whole list to `name` is faster.
-= Register and blocks
+>     - ansible.builtin.user:
+>         name: "{{ item }}"
+>         groups: developers
+>         append: true
+>       loop: [ana, ravi, li]
+- loop = repeat the task for each value; `{{ item }}` is the current value
+- append: true = add the group without removing others
+For packages, pass the whole list to `name:` instead; one apt call is much faster than three.
+= register, block and rescue
 * p
-`register` keeps a result for later. `block`, `rescue`, `always` work like try, catch, finally.
+>     - ansible.builtin.command: /opt/app/healthcheck
+>       register: health
+>       changed_when: false
+>     - ansible.builtin.debug: { msg: "Health said {{ health.stdout }}" }
+- register: health = save the task's result in the variable `health`
+- changed_when: false = this command never changes anything
+- health.stdout = its output; `health.rc` is the exit code
+`block` groups tasks; `rescue` runs if one of them fails; `always` runs either way, like try, catch and finally.
 ? Which value wins? | group_vars | host_vars | *-e on the command line
+^ https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_variables.html Ansible: variables
 
 # an-roles | Roles, collections and Vault | Intermediate | Reuse and secrets.
 @ p doc 0 0 site.yml
@@ -123,28 +199,49 @@ For packages, passing the whole list to `name` is faster.
 = Role
 + p r1
 ~ p>r1
-$ ansible-galaxy role init nginx
-A fixed layout: `tasks/`, `handlers/`, `templates/`, `defaults/`, `vars/`, `meta/`.
+$ ansible-galaxy role init roles/nginx
+- role init = create the standard folder layout for a role named nginx
+Ansible finds the parts by folder: `tasks/main.yml`, `handlers/main.yml`, `templates/`, `files/`, `defaults/main.yml`, `vars/main.yml`, `meta/main.yml`. You never import them by hand.
 = Compose roles
 + r2
 ~ p>r2
-> roles: [nginx, app]
-Put values users may change in `defaults/`.
+> - hosts: web
+>   become: true
+>   roles:
+>     - nginx
+>     - role: app
+>       vars: { app_version: "1.8.2" }
+- roles = applied in order, before the play's own tasks
+Put values that users may change in `defaults/main.yml` (lowest precedence, easy to override). Use `vars/main.yml` only for internal constants.
 = Collections
 + g
 ~ g>r1
+A **collection** is a package of modules, roles and plugins, published on **Ansible Galaxy**: `community.docker`, `amazon.aws`, `kubernetes.core`.
+> # requirements.yml
+> collections:
+>   - name: community.docker
+>     version: ">=4.0.0,<5.0.0"
 $ ansible-galaxy collection install -r requirements.yml
-Packages of modules and roles. Use full names such as `community.docker.docker_container` and pin versions.
+- collection install -r requirements.yml = install every collection listed, at the pinned versions
+Always use full names in tasks, such as `community.docker.docker_container`, so it is clear which collection a module comes from.
 = Vault
 + v
 ~ v>r2 decrypt
 $ ansible-vault encrypt group_vars/prod/vault.yml
+- encrypt = encrypt the file in place with a password you choose
+$ ansible-vault encrypt_string 'S3cure!' --name db_password
+- encrypt_string = encrypt one value and print it, ready to paste into a normal YAML file
 $ ansible-playbook site.yml --ask-vault-pass
-Set `no_log: true` on tasks that handle secrets.
-= Test roles
+- --ask-vault-pass = ask for the Vault password; CI uses `--vault-password-file` with a secret file
+Add `no_log: true` to tasks that use secrets, so values are not printed even with `-v`.
+= Lint and test roles
 * r1 r2
-`ansible-lint` checks style. **Molecule** runs the role in a container, runs it again to prove idempotence, then verifies.
+$ ansible-lint
+- ansible-lint = check playbooks and roles for mistakes and bad practices
+$ molecule test
+- molecule test = create a test container, apply the role, apply it **again** to prove idempotence (0 changed), run checks, and destroy the container
 ? Values users should override go in... | vars/ | *defaults/ | handlers/
+^ https://docs.ansible.com/ansible/latest/vault_guide/index.html Ansible Vault guide
 
 # an-roll | Rolling updates and scale | Advanced | Changing a fleet without an outage.
 @ c gear 0 1 Control node
@@ -158,25 +255,51 @@ Set `no_log: true` on tasks that handle secrets.
 : a err
 : b err
 : d err
-By default Ansible works on 5 hosts in parallel (`forks`), task by task. A bad change reaches all.
-= serial
+By default Ansible runs each task on up to 5 hosts in parallel (`forks`), then moves to the next task. A broken configuration therefore reaches every web server within seconds, and the site goes down everywhere.
+= serial: batches
 : a warn updating
 ~ c>a
 : b ok
 : d ok
-> serial: [1, "25%", "100%"]
-> max_fail_percentage: 0
-One host, then a quarter, then the rest.
-= Drain first
+> - hosts: web
+>   serial: [1, "25%", "100%"]
+>   max_fail_percentage: 0
+- serial: [1, "25%", "100%"] = first run the whole play on 1 host, then on 25% of the hosts, then on the rest
+- max_fail_percentage: 0 = if any host in a batch fails, stop before the next batch
+If the first host breaks, only one server is affected and the others keep serving.
+= Drain first, test, then return
 + lb
 ~ c>lb remove web1 ;; c>a update ;; c>lb add web1
-`pre_tasks` with `delegate_to` take the host out of the load balancer; `post_tasks` test and return it.
+>   pre_tasks:
+>     - name: Take out of load balancer
+>       community.general.haproxy: { state: disabled, host: "{{ inventory_hostname }}" }
+>       delegate_to: lb1
+>   post_tasks:
+>     - ansible.builtin.uri: { url: "http://{{ ansible_host }}/health", status_code: 200 }
+>     - community.general.haproxy: { state: enabled, host: "{{ inventory_hostname }}" }
+>       delegate_to: lb1
+- pre_tasks = run before the roles and tasks
+- delegate_to: lb1 = run this task on the load balancer host, not on the web server
+- uri … status_code: 200 = fail unless the health page answers 200
+- post_tasks = run after; put the server back only if it is healthy
 = Speed
 * c
-Raise `forks`, enable pipelining, cache facts, use `async` for long tasks.
+Large fleets need tuning in `ansible.cfg`:
+> [defaults]
+> forks = 50
+> [ssh_connection]
+> pipelining = True
+- forks = 50 = work on 50 hosts at once
+- pipelining = fewer SSH round trips per task
+Fact caching and `async` for long tasks (such as a big package upgrade) help too.
 = At company scale
 * c
-**AWX** and Red Hat Ansible Automation Platform add a web UI, RBAC, schedules, logs. Event-Driven Ansible reacts to alerts.
+**AWX** (open source) and **Red Hat Ansible Automation Platform** add a web interface, role-based access, schedules, credentials storage and a log of every run. **Event-Driven Ansible** starts playbooks automatically from events, for example restarting a service when monitoring raises an alert.
 = Ansible or Terraform? | PRACTICE
-Terraform creates infrastructure and tracks it in state. Ansible configures what runs on it. Many teams use both.
+| | Terraform | Ansible |
+| Main job | Create infrastructure: networks, servers, databases | Configure what runs on servers |
+| Style | Declarative, tracks everything in a state file | Task lists, idempotent modules |
+| Typical use | "Create 3 VMs and a load balancer" | "Install and configure nginx on them" |
+Many teams use both: Terraform builds, Ansible configures.
 ? Which keyword updates hosts in batches? | forks | *serial | async
+^ https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_strategies.html Ansible: controlling playbook execution

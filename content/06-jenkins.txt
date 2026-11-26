@@ -11,20 +11,29 @@
 = Purpose
 + d g c
 ~ d>g push ;; g>c webhook
-Jenkins is an open-source automation server. It watches for events and runs jobs: build, test, package, deploy. It is free, self-hosted and has a very large plugin library.
-= Controller
+**Jenkins** is a free, open-source **automation server**. It waits for events (a push, a schedule, a button) and then runs jobs: build the code, run tests, package it, deploy it, or any script you like.
+You install and run it yourself, on a server or in a container. That gives full control and full responsibility.
+= The controller
 * c
-The controller stores configuration, schedules builds, serves the web page. It should not run builds itself.
-= Agent
+The **controller** is the brain:
+- it stores all configuration, job definitions and build history;
+- it shows the web interface and the API;
+- it keeps the **queue** and sends each build to a suitable agent.
+It should not run builds itself, so that a heavy or broken build cannot slow down or crash it.
+= Agents do the work
 + a
 ~ c>a run ;; a>c log
-Agents do the work. Each has **executors** (parallel slots) and **labels** such as `linux` or `docker`.
-= Result
+**Agents** are the machines that run builds. Each has a number of **executors** (parallel build slots) and **labels** such as `linux`, `docker` or `windows`. The controller sends a build to an agent whose labels match, streams the log back, and records the result.
+= The result
 + r n
 ~ a>r image ;; c>n passed
-The build publishes artifacts and tells people.
-= When to choose it | PRACTICE
-Choose Jenkins for self-hosting, unusual environments or heavy customisation. Hosted CI such as GitHub Actions has less to maintain. With Jenkins, upgrades and security are yours.
+A finished build can publish **artifacts** (an image to a registry, a package, a report) and **notify** people by email, Slack or Teams, and report its status back to GitHub so the pull request shows a tick or a cross.
+= When to choose Jenkins | PRACTICE
+| Choose Jenkins when… | Choose hosted CI (GitHub Actions, GitLab CI) when… |
+| You must run everything on your own servers | You are happy with cloud runners |
+| You build for unusual systems (mainframe, special hardware) | Standard Linux, Windows or Mac builds are enough |
+| You need deep customisation and many integrations | You want little to maintain |
+With Jenkins, upgrades, backups, plugin updates and security are your job.
 ? Where should builds run? | On the controller | *On agents | On the developer laptop
 ^ https://www.jenkins.io/doc/ Jenkins documentation
 
@@ -36,29 +45,58 @@ Choose Jenkins for self-hosting, unusual environments or heavy customisation. Ho
 @ b bucket 2 1 Backup
 = Java first
 + j
-From LTS 2.555.1 (April 2026) Jenkins needs **Java 21 or 25** on controller and agents. Java 17 is no longer accepted.
-= Run it
+Jenkins is written in Java. From LTS 2.555.1 (April 2026) it needs **Java 21 or 25** on the controller and on every agent; Java 17 is no longer accepted.
+$ java -version
+- java -version = show the installed Java version
+> openjdk version "21.0.5" 2024-10-15
+= Run it in a container
 + c
 ~ j>c
-$ docker run -d --name jenkins -p 8080:8080 -v jenkins_home:/var/jenkins_home jenkins/jenkins:lts-jdk21
-Choose **LTS** for stability. Weekly releases bring features sooner.
-= Unlock
+$ docker run -d --name jenkins -p 8080:8080 -p 50000:50000 -v jenkins_home:/var/jenkins_home jenkins/jenkins:lts-jdk21
+- docker run -d = start a container in the background
+- --name jenkins = name it, so later commands can refer to it
+- -p 8080:8080 = the web interface on port 8080 of your machine
+- -p 50000:50000 = the port inbound agents connect to
+- -v jenkins_home:/var/jenkins_home = keep all Jenkins data in a named volume, so it survives restarts and upgrades
+- jenkins/jenkins:lts-jdk21 = the official image, LTS line, with Java 21
+**LTS** (long-term support) releases come every 12 weeks and are tested more; **weekly** releases bring features sooner. Use LTS for real work.
+= Or install on Ubuntu
+$ sudo apt install fontconfig openjdk-21-jre
+$ sudo apt install jenkins
+- openjdk-21-jre = Java 21; `fontconfig` is needed for some UI features
+- jenkins = available after adding the Jenkins apt repository, as described on jenkins.io
+$ sudo systemctl enable --now jenkins
+- enable --now = start Jenkins now and at every boot
+= Unlock and first login
 " u First login done.
 + u
 ~ u>c password
+Open `http://localhost:8080`. Jenkins asks for a one-time password it wrote to a file:
 $ docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
-Paste it, install suggested plugins, create a real admin account.
+- docker exec jenkins = run a command inside the running container named jenkins
+- cat … = print the file with the password
+Paste it, choose **Install suggested plugins**, then create a real admin account. Do not keep using the initial password.
 = JENKINS_HOME
 + h
 ~ c>h stores
-Jobs, build history, plugins and encrypted credentials live here.
+Everything Jenkins knows lives in one folder, **JENKINS_HOME** (`/var/jenkins_home` in the container, `/var/lib/jenkins` on Ubuntu):
+- `jobs/` = job configuration and build history;
+- `plugins/` = installed plugins;
+- `secrets/` = the keys that decrypt stored credentials;
+- `config.xml` = global settings.
 = Back it up
 + b
 ~ h>b nightly
 : b ok tested restore
-Back up the whole folder including `secrets/`, or credentials cannot be decrypted. Practise restoring.
+Back up the whole JENKINS_HOME, including `secrets/`. Without it, the backup's credentials cannot be decrypted.
+$ docker run --rm -v jenkins_home:/data -v "$PWD":/backup alpine tar czf /backup/jenkins-$(date +%F).tgz -C /data .
+- --rm = delete this helper container when done
+- -v jenkins_home:/data = mount the Jenkins volume
+- -v "$PWD":/backup = mount the current folder for the archive
+- alpine tar czf … -C /data . = create a compressed archive of everything in the volume
+A backup you have never restored is only a hope. Restore it to a test machine every few months.
 ? Which Java does current Jenkins LTS need? | 11 | 17 | *21 or 25
-^ https://www.jenkins.io/doc/book/platform-information/support-policy-java/ Java support policy
+^ https://www.jenkins.io/doc/book/installing/ Jenkins: installing
 
 # jk-jobs | Job types and triggers | Beginner | Freestyle, Pipeline, Multibranch and what starts them.
 @ w flag 0 0 Webhook
@@ -71,24 +109,39 @@ Back up the whole folder including `secrets/`, or credentials cannot be decrypte
 = Freestyle
 + f b
 ~ f>b
-Configured by clicking. Easy to start, hard to review: the setup lives only in Jenkins.
+A **Freestyle** job is configured by clicking in forms: source code, build steps, post-build actions. It is quick for a first experiment, but the setup lives only inside Jenkins: no review, no history, hard to copy.
 = Pipeline
 + p
 ~ p>b
-The steps are code in a **Jenkinsfile** stored with the application.
+A **Pipeline** job runs a **Jenkinsfile**: the steps are code, stored in the application's repository. Choose "Pipeline script from SCM" so Jenkins reads it from Git, rather than pasting script into the job.
 = Multibranch
 + mb
 ~ mb>b per branch
-Jenkins scans a repository and creates a job for every branch and pull request with a Jenkinsfile. Organization Folders scan many repositories.
+A **Multibranch Pipeline** scans a repository and creates a job for **every branch and pull request** that contains a Jenkinsfile. New branch: new job. Deleted branch: its job goes away. Results are reported back to the pull request.
+An **Organization Folder** does the same for every repository in a GitHub organisation.
 = Triggers
 + w t m
 ~ w>f ;; t>p ;; m>mb
-**Webhooks** are instant. **Cron** runs on time: `H 2 * * *` is nightly, and `H` spreads load. **Upstream** starts after another job. Polling works but wastes requests.
+| Trigger | How | When to use |
+| Webhook | GitHub calls Jenkins on push | Normal builds; instant |
+| Cron | `triggers { cron('H 2 * * *') }` | Nightly tests, clean-ups |
+| Upstream | `triggers { upstream('build-lib') }` | After another job succeeds |
+| Polling | `triggers { pollSCM('H/5 * * * *') }` | Only when webhooks are impossible |
+- H = "hash": Jenkins picks a fixed but spread-out minute per job, so 100 nightly jobs do not all start at 02:00
+- H/5 = every five minutes, at a spread-out offset
 = Parameters
 * p
-A build can ask for input: version, environment, yes or no.
-!! Treat parameters as untrusted. Never paste them straight into a shell command.
+A build can ask for input before it starts:
+> parameters {
+>   choice(name: 'ENV', choices: ['staging', 'production'])
+>   booleanParam(name: 'RUN_E2E', defaultValue: true)
+> }
+- choice = a drop-down list; the value is available as `params.ENV`
+- booleanParam = a tick box
+The job page then shows **Build with Parameters**.
+!! Treat parameters as untrusted text. Never paste them into a shell command inside double quotes; pass them as environment variables and quote them in the shell.
 ? Which type makes a job per branch? | Freestyle | *Multibranch | Cron
+^ https://www.jenkins.io/doc/book/pipeline/multibranch/ Jenkins: multibranch pipelines
 
 ## Pipelines
 # jk-file | Writing a Jenkinsfile | Intermediate | Stages, steps, post, and parallel work.
@@ -104,36 +157,72 @@ A build can ask for input: version, environment, yes or no.
 > pipeline {
 >   agent { label 'linux' }
 >   stages {
->     stage('Build') { steps { sh 'npm ci && npm run build' } }
+>     stage('Build') {
+>       steps { sh 'npm ci && npm run build' }
+>     }
 >   }
 > }
-Declarative pipeline has a fixed structure: agent, stages, steps. **Scripted** pipeline is freer Groovy; prefer declarative.
-= Parallel
+- pipeline { } = the whole declarative pipeline
+- agent { label 'linux' } = run on a node with this label
+- stages { } = the list of phases
+- stage('Build') = one phase, shown as a column in the UI
+- steps { } = what this stage does
+- sh '…' = run in the shell; `&&` runs the second command only if the first succeeded
+In a Multibranch or "from SCM" job, the code is checked out automatically before the first stage.
+= Parallel stages
 + s3 s4
 ~ s2>s3 ;; s2>s4
-> stage('Checks') { parallel {
->   stage('Unit') { steps { sh 'npm test' } }
->   stage('Lint') { steps { sh 'npm run lint' } }
-> } }
-Independent work runs side by side.
-= Conditions
+> stage('Checks') {
+>   parallel {
+>     stage('Unit') { steps { sh 'npm test' } }
+>     stage('Lint') { steps { sh 'npm run lint' } }
+>   }
+> }
+- parallel { } = run the stages inside at the same time, on free executors
+Unit tests (3 minutes) and lint (1 minute) now take 3 minutes in total instead of 4. Use it only for work that does not depend on each other.
+= Conditions with when
 + s5
 ~ s3>s5 main only
-> stage('Package') { when { branch 'main' } steps { sh './package.sh' } }
-`when` decides whether a stage runs.
+> stage('Package') {
+>   when { branch 'main' }
+>   steps { sh './package.sh' }
+> }
+- when { branch 'main' } = run this stage only on the main branch; feature branches skip it
+Other conditions: `changeRequest()` (only for pull requests), `tag 'v*'` (only for version tags), `expression { params.RUN_E2E }`.
 = Options
 * s2
-> options { timeout(time: 20, unit: 'MINUTES'); buildDiscarder(logRotator(numToKeepStr: '30')); disableConcurrentBuilds() }
-Time limits stop stuck builds; discarding old builds saves disk.
-= Post
+> options {
+>   timeout(time: 20, unit: 'MINUTES')
+>   buildDiscarder(logRotator(numToKeepStr: '30'))
+>   disableConcurrentBuilds()
+> }
+- timeout = abort the build if it takes longer than 20 minutes (a stuck test can otherwise hold an executor for days)
+- buildDiscarder(logRotator(numToKeepStr: '30')) = keep only the last 30 builds, to save disk
+- disableConcurrentBuilds = never run two builds of this job at once
+= Post: after the stages
 + po
 ~ s5>po
-> post { always { junit 'reports/*.xml' } failure { echo 'notify team' } cleanup { cleanWs() } }
-Runs after the stages: `always`, `success`, `failure`, `unstable`, `changed`, `cleanup`.
+> post {
+>   always  { junit 'reports/*.xml' }
+>   failure { mail to: 'team@acme.io', subject: "Failed: ${env.JOB_NAME}", body: env.BUILD_URL }
+>   cleanup { cleanWs() }
+> }
+- always = run whatever the result; here publish test reports so trends show up
+- failure = only when the build failed
+- ${env.JOB_NAME} / env.BUILD_URL = built-in variables
+- cleanup { cleanWs() } = run last, and delete the workspace to free disk
+Other blocks: `success`, `unstable`, `changed` (result differs from the previous build).
 = Approval
 : s5 warn waiting
-`input` pauses for a person. Use it outside an agent so no executor is held while waiting.
+> stage('Deploy') {
+>   agent none
+>   steps { input message: 'Deploy to production?', submitter: 'leads' }
+> }
+- input = pause until a person clicks Proceed or Abort
+- submitter: 'leads' = only members of this group may approve
+- agent none = do not hold an executor while waiting, which could take hours
 ? Which block runs whatever the result? | post success | *post always | when
+^ https://www.jenkins.io/doc/book/pipeline/syntax/ Jenkins: pipeline syntax
 
 # jk-cred | Credentials and shared libraries | Intermediate | Secrets in builds, and reusing pipeline code.
 @ v key 0 0 Credentials
@@ -144,29 +233,45 @@ Runs after the stages: `always`, `success`, `failure`, `unstable`, `changed`, `c
 = In the Jenkinsfile? | PROBLEM
 + a lo
 ~ !a>lo password
-A password in code is visible to everyone and forever in history.
-= Credentials store | SOLUTION
+A token written in the Jenkinsfile is visible to everyone who can read the repository, stays in Git history forever, and often shows up in build logs.
+= The credentials store | SOLUTION
 + v c
 ~ v>c ;; c>a for one block
+Store the secret in Jenkins (Manage Jenkins, Credentials) and refer to it by ID:
 > withCredentials([string(credentialsId: 'npm-token', variable: 'NPM_TOKEN')]) {
 >   sh 'npm publish'
 > }
-Refer by ID. Jenkins masks the value in logs.
+- withCredentials([...]) = make secrets available only inside the braces
+- string(credentialsId: 'npm-token', …) = a "Secret text" credential with this ID
+- variable: 'NPM_TOKEN' = the environment variable the value is put in
+Jenkins replaces the value with `****` if it appears in the log.
+For whole stages there is a shorter form:
+> environment { NPM_TOKEN = credentials('npm-token') }
 = Single quotes matter
 : lo err leaked
 * lo
-`sh "curl $TOKEN"` in double quotes lets Groovy insert the secret. Single quotes leave it for the shell.
-!! Masking is not perfect. A build can still print an encoded secret, so limit who may change pipelines.
+> sh "curl -H 'Authorization: $TOKEN' https://api.acme.io"
+> sh 'curl -H "Authorization: $TOKEN" https://api.acme.io'
+- "…" (Groovy double quotes) = Groovy inserts the secret into the command text itself; it can appear in logs and process lists, and Jenkins warns about it
+- '…' (Groovy single quotes) = Groovy leaves `$TOKEN` alone; the shell reads it from the environment
+!! Masking is not perfect: a build can still print a secret in an encoded form. Limit who may change Jenkinsfiles that use production credentials.
 = Scope
 * v
-Put credentials in the folder that needs them. Prefer short-lived cloud roles.
-= Shared library
+- Put credentials in the **folder** that needs them, not in the global store where every job can use them.
+- Use separate credentials per environment.
+- Prefer short-lived cloud credentials (for example AWS roles with OIDC) over long-lived keys.
+= Shared libraries
 + l
 ~ l>c load
+Fifty repositories with the same 80-line Jenkinsfile become hard to change. A **shared library** is a Git repository of reusable pipeline code:
 > @Library('acme-lib@v3') _
 > standardNodePipeline(nodeVersion: '24')
-Fifty Jenkinsfiles with the same 80 lines become one call. Functions live in `vars/`. Pin a version.
+- @Library('acme-lib@v3') = load the library configured as `acme-lib`, at tag v3
+- _ = needed after the annotation when nothing else is imported
+- standardNodePipeline(…) = a step defined in the library's `vars/standardNodePipeline.groovy`
+Pin a version so a change to the library does not break every project at once.
 ? Why single quotes around a secret in sh? | Speed | *Groovy does not insert the secret | Required syntax
+^ https://www.jenkins.io/doc/book/pipeline/shared-libraries/ Jenkins: shared libraries
 
 ## Running it
 # jk-agents | Agents and scaling | Advanced | Static, SSH, Docker and Kubernetes agents.
@@ -175,28 +280,48 @@ Fifty Jenkinsfiles with the same 80 lines become one call. Functions live in `va
 @ s server 2 0 SSH agent
 @ d box 2 1 Docker agent
 @ k pod 2 2 Kubernetes pod
-= Queue grows | PROBLEM
+= The queue grows | PROBLEM
 + c q
 ~ c>q builds
 : q err 40 waiting
-One machine cannot keep up, and tools for different projects clash.
+Forty builds wait in the queue every morning. Developers wait twenty minutes for feedback, and projects needing different tool versions break each other's builds on shared machines.
 = Static agents
 + s
 ~ q>s
-A machine connected over SSH, or inbound when it sits behind a firewall.
+A **static agent** is a permanent machine connected over SSH or inbound. Simple, but tools pile up on it over time, and it costs money even when idle.
 = Docker agents
 + d
 ~ q>d
-> agent { docker { image 'node:24' } }
-Each build runs in a clean container with the right tools.
+> pipeline {
+>   agent { docker { image 'node:24-alpine' } }
+>   stages { stage('Test') { steps { sh 'npm ci && npm test' } } }
+> }
+- agent { docker { image 'node:24-alpine' } } = start this container on an agent with Docker and run all steps inside it
+Every build gets a clean environment with exactly the tools in the image. Project A can use Node 22 and project B Node 24 on the same machine.
 = Kubernetes agents
 + k
 ~ q>k new pod ;; k>c done
-The Kubernetes plugin starts a pod per build and removes it. Capacity follows demand.
+With the **Kubernetes plugin**, Jenkins starts a fresh **pod** for each build and deletes it afterwards:
+> agent {
+>   kubernetes {
+>     yaml '''
+>       spec:
+>         containers:
+>         - name: node
+>           image: node:24
+>           command: ["sleep", "infinity"]
+>     '''
+>   }
+> }
+- kubernetes { yaml … } = the pod to start, written as Kubernetes YAML
+- command: sleep infinity = keep the container alive so Jenkins can run steps in it
+Then use `container('node') { sh 'npm test' }`. Capacity grows with demand and costs nothing when idle.
 = Isolation | RISK
 : d warn docker.sock
-Mounting the Docker socket gives a build root-like control of that host. Use rootless builders such as BuildKit rootless or Buildah.
+To build images, some setups mount the host's Docker socket (`/var/run/docker.sock`) into the build. That gives the build full control of the host's Docker, which is almost the same as root on that machine: a malicious pull request could take over the agent.
+Prefer builders that do not need it: **BuildKit rootless**, **Buildah** or **Kaniko**.
 ? Which agent type disappears after each build? | Static SSH | *Kubernetes pod | Controller
+^ https://plugins.jenkins.io/kubernetes/ Jenkins Kubernetes plugin
 
 # jk-ops | Securing and maintaining Jenkins | Advanced | Access, plugins, configuration as code.
 @ u user 0 0 User
@@ -208,21 +333,36 @@ Mounting the Docker socket gives a build root-like control of that host. Use roo
 = Who may do what
 + u au c
 ~ u>au ;; au>c
-Connect single sign-on. Authorise with matrix or role-based strategy. Nobody needs admin for daily work.
+- **Authentication** (who are you?): connect Jenkins to your company's single sign-on (LDAP, SAML, OIDC) instead of local accounts.
+- **Authorisation** (what may you do?): use **Matrix** or **Role-based** strategy. Developers may build and read logs; only a few admins may change system settings.
+Nobody needs admin rights for daily work.
 = Plugins
 + p
 : p warn update
-Install few. Each plugin is code with access to your server. Follow security advisories and update on schedule, on a test instance first.
+Each plugin is code with access to your controller and its secrets.
+- Install as few as possible.
+- Read the **security advisories** Jenkins publishes, and update on a fixed schedule.
+- Try updates on a staging Jenkins first.
 = Configuration as Code
 + j
 ~ j>c apply
-The **JCasC** plugin sets up Jenkins from YAML, so you can rebuild and review it.
+The **JCasC** (Jenkins Configuration as Code) plugin sets up Jenkins from a YAML file:
+> jenkins:
+>   systemMessage: "Managed by JCasC. Do not edit by hand."
+>   numExecutors: 0
+>   securityRealm:
+>     local:
+>       allowsSignup: false
+- numExecutors: 0 = the controller runs no builds itself
+- allowsSignup: false = nobody can create their own account
+Keep the YAML in Git. A new or broken Jenkins can be rebuilt identically in minutes, and every change is reviewed.
 = Watch it
 + m
 ~ c>m
-Track queue time, executor use, disk space and failed builds. Disk filling with old builds is the classic outage.
+Track: queue length and wait time, executor use, disk space of JENKINS_HOME, and the failure rate of builds. The classic Jenkins outage is a full disk from years of old builds and artifacts; `buildDiscarder` in every job prevents it.
 = Keep it private | RISK
 * c
 : c err public
-Do not expose Jenkins straight to the internet. Put it behind VPN or an authenticating proxy; it holds keys to production.
+Jenkins holds keys to source code, registries and production. Do not expose it straight to the internet. Put it behind a VPN or an authenticating proxy, and allow webhooks through only the endpoint they need.
 ? JCasC lets you... | write plugins | *define Jenkins setup in YAML | run builds faster
+^ https://www.jenkins.io/doc/book/security/ Jenkins: securing Jenkins

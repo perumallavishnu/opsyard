@@ -2,6 +2,8 @@
 
 **Learn DevOps by watching it happen.** A free, visual course from beginner to advanced: 13 subjects, explained one step at a time with isometric animations, in 10 languages.
 
+**Live site: [opsyard-visuals.vercel.app](https://opsyard-visuals.vercel.app)**
+
 No account. No payment. No packages to install.
 
 ![Opsyard home page](docs/home.png)
@@ -28,21 +30,21 @@ Opsyard has four goals:
 | Subject | Lessons | Includes |
 |---|---|---|
 | Software Lifecycles | 32 | SDLC models by project size, Agile, Scrum, Kanban, Jira in a real project |
-| Linux and Networking | 18 | Files, permissions, processes, DNS, ports, SSH |
-| Git | 17 | Commits, branches, merging, undoing |
+| Linux and Networking | 19 | Terminal commands, files, permissions, processes, DNS, ports, SSH |
+| Git | 18 | Setup, commits, branches, merging, push and pull, undoing |
 | GitHub | 12 | Pull requests, reviews, issues, Actions |
 | CI/CD | 12 | Pipelines, testing, deployment strategies |
 | Jenkins | 14 | Agents, pipelines, plugins, credentials |
-| Docker | 18 | Images, containers, volumes, networks, Compose |
+| Docker | 19 | Install, images, containers, volumes, networks, Compose |
 | Kubernetes | 23 | Pods, Deployments, Services, scaling, storage |
 | Ansible | 11 | Inventory, playbooks, roles |
-| Terraform and IaC | 12 | State, plan, modules |
-| AWS | 32 | IAM, EC2, S3, VPC and other core services |
+| Terraform and IaC | 13 | HCL, state, plan, modules |
+| AWS | 33 | CLI, IAM, EC2, S3, VPC and other core services |
 | Observability and SRE | 12 | Metrics, logs, traces, error budgets |
 | DevSecOps | 11 | Security through the whole pipeline |
-| **Total** | **224** | **1,113 animated steps** |
+| **Total** | **229** | **1,299 animated steps** |
 
-Also included: **231 commands**, each with an animation and a risk label, and **30 Ubuntu and Kali Linux tools** with purpose, usage, risks and guidelines.
+Every command in a lesson is explained word by word, including each option. Also included: **231 commands**, each with an animation and a risk label, and **30 Ubuntu and Kali Linux tools** with purpose, usage, risks and guidelines.
 
 Every subject follows the same order: *why it exists* → *a short history* → *concepts one by one* → *flows that combine them*.
 

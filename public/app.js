@@ -47,17 +47,24 @@ const enter = html => { main.innerHTML = html; main.scrollTop = 0; };
 
 /* learn */
 const cmdBlocks = body => {
-  let out = '', buf = [], rows = [];
+  let out = '', buf = [], rows = [], parts = [], lis = [];
   const table = () => { if (rows.length) out += `<div class="tb" tabindex="0"><table>${rows.map((x, i) => `<tr>${x.split('|').map(c => `<t${i ? 'd' : 'h'}>${md(c.trim())}</t${i ? 'd' : 'h'}>`).join('')}</tr>`).join('')}</table></div>`; rows = []; };
-  const flush = () => { if (buf.length) out += `<pre translate="no" tabindex="0">${buf.join('\n')}</pre>`; buf = []; };
+  const flush = () => { if (buf.length) out += `<pre translate="no" tabindex="0"${parts.length ? ' class="has"' : ''}>${buf.join('\n')}</pre>`; buf = []; };
+  const lists = () => {
+    if (parts.length) { flush(); out += `<dl class="anat">${parts.map(b => `<dt translate="no"><code>${esc(b.a.replace(/\*\*|`/g, ''))}</code></dt><dd>${md(b.t)}</dd>`).join('')}</dl>`; parts = []; }
+    if (lis.length) { out += `<ul class="li">${lis.map(b => `<li>${md(b.t)}</li>`).join('')}</ul>`; lis = []; }
+  };
   for (const b of body) {
+    if (b.k === 'part') { parts.push(b); continue; }
+    if (b.k === 'li') { flush(); lis.push(b); continue; }
+    lists();
     if (b.k === 'row') { flush(); rows.push(b.t); continue; }
     table();
     if (b.k === 'cmd') buf.push(`<span class="p">$ </span>${esc(b.t)}`);
     else if (b.k === 'out') buf.push(`<span class="o">${esc(b.t)}</span>`);
     else { flush(); out += b.k === 'p' ? `<p>${md(b.t)}</p>` : `<div class="box ${b.k}">${ui(b.k === 'key' ? 'lightbulb' : 'triangle-alert', 18)}<div><b class="h">${t(b.k)}</b>${md(b.t)}</div></div>`; }
   }
-  flush(); table(); return out;
+  lists(); flush(); table(); return out;
 };
 async function showLesson(id, n) {
   const my = ++seq, meta = metaOf(id); if (!meta) return home();
